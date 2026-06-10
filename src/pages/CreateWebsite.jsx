@@ -23,7 +23,7 @@ const CreateWebsite = () => {
     e.preventDefault();
     if (!prompt.trim()) return;
     // Redirect to IDE, passing the prompt via state
-    navigate('/ide', { state: { initialPrompt: prompt } });
+    navigate('/dashboard', { state: { initialPrompt: prompt } });
   };
 
   return (

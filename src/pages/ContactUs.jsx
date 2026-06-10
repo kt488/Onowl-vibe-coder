@@ -86,13 +86,13 @@ const ContactUs = () => {
             </div>
 
             <div className="flex items-start gap-4 p-4 rounded-2xl bg-surface/30 border border-white/5 hover:border-primary/20 transition group">
-              <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform">
+              <div className="p-3 rounded-xl bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform">
                 <MessageSquare className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mb-1">Live Chat</h3>
-                <p className="text-white font-medium">Available 24/7</p>
-                <p className="text-xs text-gray-500 mt-1">Inside the IDE dashboard</p>
+                <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mb-1">Telegram</h3>
+                <a href="https://t.me/onowlio" target="_blank" rel="noopener noreferrer" className="text-white font-medium hover:text-primary transition">Join our channel</a>
+                <p className="text-xs text-gray-500 mt-1">Get updates and community support</p>
               </div>
             </div>
           </div>

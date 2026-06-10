@@ -21,7 +21,7 @@ async function testWorkingKey() {
         apiKey: workingKey,
         baseURL: 'https://integrate.api.nvidia.com/v1',
         maxRetries: 1, 
-        timeout: 10000 // 10s timeout
+        timeout: 300000 // 5m timeout
     });
 
     for (const m of models) {

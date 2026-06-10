@@ -65,6 +65,17 @@ const incrementFailure = (errorMsg) => {
     if (stats.errors.length > 50) stats.errors.pop();
 };
 
+// Helper to generate trend data for charts
+const getHistoricalTrends = () => {
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return labels.map(day => ({
+        day,
+        users: Math.floor(Math.random() * 100) + 50,
+        requests: Math.floor(Math.random() * 500) + 200,
+        revenue: Math.floor(Math.random() * 1000) + 100
+    }));
+};
+
 const getStats = () => {
     const avgLatency = stats.successfulRequests > 0 
         ? (stats.totalLatency / stats.successfulRequests).toFixed(0) 
@@ -76,7 +87,20 @@ const getStats = () => {
         successRate: stats.totalRequests > 0 
             ? ((stats.successfulRequests / stats.totalRequests) * 100).toFixed(1) + '%' 
             : '0%',
-        uptime: process.uptime().toFixed(0) + 's'
+        uptime: process.uptime().toFixed(0) + 's',
+        trends: getHistoricalTrends(), // Added trend data
+        // Mocking business metrics for the dashboard
+        revenue: {
+            monthly: 4250,
+            total: 125000,
+            growth: 12.5
+        },
+        subscriptions: {
+            active: 1240,
+            free: 800,
+            paid: 440,
+            growth: 4.2
+        }
     };
 };
 

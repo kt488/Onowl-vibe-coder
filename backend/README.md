@@ -29,7 +29,7 @@ Variables in `.env`:
 - `NVIDIA_NIM_API_KEY`: Your secret NIM API key.
 - `PORT`: The port the server runs on (default: 5000).
 - `NODE_ENV`: Set to `production` or `development`.
-- `CORS_ORIGIN`: The URL of your frontend (e.g., `http://localhost:3000`).
+- `CORS_ORIGIN`: The URL of your frontend (e.g., `https://onowl-vibe-coder-production.up.railway.app/`).
 
 ### 3. Run the Server
 For development (with hot-reloading via nodemon):

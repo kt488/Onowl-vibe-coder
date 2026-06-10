@@ -1,28 +1,69 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
 import Landing from './pages/Landing';
 import IDE from './pages/IDE';
+import Dashboard from './pages/Dashboard';
+import Projects from './pages/Projects';
 import CreateWebsite from './pages/CreateWebsite';
 import Admin from './pages/Admin';
 import Auth from './pages/Auth';
 import ContactUs from './pages/ContactUs';
+import Settings from './pages/Settings';
+import Subscription from './pages/Subscription';
+import Terms from './pages/Terms';
+import Pricing from './pages/Pricing';
+
+import { Toaster } from 'react-hot-toast';
 import ErrorBoundary from './ErrorBoundary';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
     <>
+      <Toaster position="top-right" reverseOrder={false} />
       <ErrorBoundary>
-        <Routes>
-          <Route path="/" element={<Landing />} />
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<Landing />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/contact" element={<ContactUs />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/pricing" element={<Pricing />} />
+
           <Route path="/create" element={<CreateWebsite />} />
-          <Route path="/ide" element={<IDE />} />
           <Route path="/admin" element={<Admin />} />
+          
+          <Route path="/ide" element={
+            <ProtectedRoute>
+              <IDE />
+            </ProtectedRoute>
+          } />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/projects" element={
+            <ProtectedRoute>
+              <Projects />
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          } />
+          <Route path="/subscription" element={
+            <ProtectedRoute>
+              <Subscription />
+            </ProtectedRoute>
+          } />
         </Routes>
-      </ErrorBoundary>
-    </>
-  );
-}
+        </AuthProvider>
+        </ErrorBoundary>
+        </>
+        );
+        }
 
 export default App;

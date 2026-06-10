@@ -12,7 +12,7 @@ function executeCommand(command, args = [], onData, onExit) {
     const child = spawn(command, args, {
         cwd: WORKSPACE_ROOT,
         shell: true,
-        env: { ...process.env, FORCE_COLOR: true }
+        env: { ...process.env, FORCE_COLOR: "1" }
     });
 
     child.stdout.on('data', (data) => {

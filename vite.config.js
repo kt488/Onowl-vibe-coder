@@ -9,7 +9,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'https://onowl-vibe-coder-production.up.railway.app/',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
         timeout: 0, // No timeout for AI streams

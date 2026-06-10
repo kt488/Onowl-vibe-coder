@@ -5,13 +5,14 @@ const morgan = require('morgan');
 const path = require('path');
 const chatRoutes = require('./routes/chat');
 const adminRoutes = require('./routes/admin');
+const paymentRoutes = require('./routes/payments');
 const { supabase } = require('./utils/supabase');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from the React frontend 'dist' directory
+app.use(express.static(path.join(__dirname, '../dist')));
 
 // ==========================================
 // Middleware Configuration
@@ -40,6 +41,9 @@ app.use('/api/chat', chatRoutes);
 // Admin stats endpoint
 app.use('/api/admin', adminRoutes);
 
+// Payment endpoints
+app.use('/api/payments', paymentRoutes);
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.status(200).json({ 
@@ -53,9 +57,14 @@ app.get('/api/health', (req, res) => {
 // Global Error Handling
 // ==========================================
 
-// Catch unhandled routes
-app.use((req, res, next) => {
-    res.status(404).json({ success: false, error: 'Route not found' });
+// Catch unhandled API routes
+app.use('/api/*', (req, res, next) => {
+    res.status(404).json({ success: false, error: 'API Route not found' });
+});
+
+// For all other routes, serve the React app (SPA fallback)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 // Global error handler

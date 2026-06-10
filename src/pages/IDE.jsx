@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
-import { Download, FolderArchive, Play, TerminalSquare, Github, MessageSquare, Plus, FileCode2, Loader2, ArrowLeft, Zap, Image, X, Save, Folder, ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
+import { Download, FolderArchive, Play, TerminalSquare, Github, MessageSquare, Plus, FileCode2, Loader2, ArrowLeft, Zap, Image, X, Save, Folder, ChevronRight, ChevronDown, Trash2, ExternalLink as ExternalLinkIcon } from 'lucide-react';
 import { exportProjectAsZip, downloadSingleFile } from '../utils/download';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
+import ProfileBar from '../components/ProfileBar';
 
 const DEFAULT_FILES = [
   { id: '1', name: 'index.html', language: 'html', content: '<!DOCTYPE html>\n<html>\n<head>\n  <title>Onowl App</title>\n</head>\n<body>\n  <h1>Hello from Onowl AI</h1>\n</body>\n</html>' },
@@ -15,11 +16,15 @@ const IDE = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const initialPrompt = location.state?.initialPrompt || '';
+  const isCreateNew = location.state?.createNew || false;
+  const loadWorkspaceId = location.state?.workspaceId || null;
   const hasFetchedInitial = useRef(false);
   const terminalEndRef = useRef(null);
 
   const [workspaceId, setWorkspaceId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [userPlan, setUserPlan] = useState('free');
+
 
   const [files, setFiles] = useState(DEFAULT_FILES);
   const [activeFileId, setActiveFileId] = useState('1');
@@ -43,6 +48,9 @@ const IDE = () => {
     { type: 'info', text: 'VITE v5.1.6  ready in 124 ms' },
     { type: 'sys', text: '➜  Local:   Sandbox Engine Active' }
   ]);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
   const activeFile = files.find(f => f.id === activeFileId);
 
@@ -101,13 +109,29 @@ const IDE = () => {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('workspaces')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .single();
+      const { data: profile } = await supabase.from('profiles').select('plan').eq('id', user.id).single();
+      if (profile) setUserPlan(profile.plan);
+
+      if (isCreateNew) {
+        // Force create new workspace
+        const { data: newWs } = await supabase
+          .from('workspaces')
+          .insert({ user_id: user.id, files: DEFAULT_FILES, chat_history: messages, terminal_logs: terminalLogs })
+          .select()
+          .single();
+        if (newWs) setWorkspaceId(newWs.id);
+        return;
+      }
+
+      let query = supabase.from('workspaces').select('*').eq('user_id', user.id);
+      
+      if (loadWorkspaceId) {
+        query = query.eq('id', loadWorkspaceId);
+      } else {
+        query = query.order('updated_at', { ascending: false }).limit(1);
+      }
+
+      const { data, error } = await query.single();
 
       if (data) {
         setWorkspaceId(data.id);
@@ -143,8 +167,38 @@ const IDE = () => {
     const timer = setTimeout(() => {
       if (workspaceId) saveWorkspace();
     }, 2000);
-    return () => clearTimeout(timer);
+    
+    return () => {
+      clearTimeout(timer);
+    };
   }, [files, messages, terminalLogs, workspaceId]);
+
+  // Save on unmount to ensure no data is lost
+  useEffect(() => {
+    return () => {
+      if (workspaceId) {
+        supabase.from('workspaces').update({ 
+          files, 
+          chat_history: messages, 
+          terminal_logs: terminalLogs, 
+          updated_at: new Date() 
+        }).eq('id', workspaceId).then();
+      }
+    };
+  }, [workspaceId, files, messages, terminalLogs]);
+
+  const handleBackNavigation = async () => {
+    setIsSaving(true);
+    if (workspaceId) {
+      await supabase.from('workspaces').update({ 
+        files, 
+        chat_history: messages, 
+        terminal_logs: terminalLogs, 
+        updated_at: new Date() 
+      }).eq('id', workspaceId);
+    }
+    navigate('/dashboard');
+  };
 
   const deleteFile = (fileId) => {
     if (window.confirm('Delete this file?')) {
@@ -211,6 +265,11 @@ const IDE = () => {
   };
 
   const handleZipExport = async () => {
+    if (userPlan === 'free') {
+      alert('Exporting ZIPs requires a Pro plan or higher.');
+      navigate('/subscription');
+      return;
+    }
     setIsExporting(true);
     try {
       await exportProjectAsZip(files, 'onowl-export');
@@ -218,6 +277,15 @@ const IDE = () => {
       console.error(e);
     }
     setIsExporting(false);
+  };
+
+  const handleDownloadFile = (fileName, content) => {
+    if (userPlan === 'free') {
+      alert('Downloading files requires a Pro plan or higher.');
+      navigate('/subscription');
+      return;
+    }
+    downloadSingleFile(fileName, content);
   };
 
   // Scroll terminal to bottom automatically
@@ -258,29 +326,53 @@ const IDE = () => {
   };
 
   const streamAIResponse = async (chatHistory) => {
-    setMessages(prev => [...prev, { role: 'ai', text: '' }]);
     setTerminalLogs(prev => [...prev, { type: 'sys', text: '➜  AI Engine started compiling code...' }]);
+    setIsLoading(true);
+    setLoadingProgress(10);
+
+    const progressInterval = setInterval(() => {
+      setLoadingProgress(prev => {
+        if (prev >= 90) return prev;
+        return prev + 5;
+      });
+    }, 500);
 
     try {
       const apiMessages = chatHistory.map(m => ({
         role: m.role === 'ai' ? 'assistant' : m.role,
         content: m.text
       })).filter(m => m.content); 
-      
+
+      const { data: { session } } = await supabase.auth.getSession();
+
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': session ? `Bearer ${session.access_token}` : ''
+        },
         body: JSON.stringify({
           messages: apiMessages,
-          temperature: 0.7,
+          temperature: selectedModel.includes('kimi') ? 0.3 : 0.7,
           max_tokens: 2048,
           model: selectedModel,
           image: selectedImage
         })
       });
 
+      clearInterval(progressInterval);
+      setLoadingProgress(100);
+      setTimeout(() => {
+        setIsLoading(false);
+        setLoadingProgress(0);
+      }, 500);
+
+      if (response.status === 429) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Daily limit reached.');
+      }
       if (!response.ok) throw new Error('Failed to connect to AI backend.');
-      
+
       // Clear image after sending
       setSelectedModelImage(null);
 
@@ -289,13 +381,14 @@ const IDE = () => {
       let done = false;
       let fullContent = '';
       let buffer = ''; // Buffer for fragmented lines
+      let hasStartedMessage = false;
 
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
           buffer += decoder.decode(value, { stream: true });
-          
+
           let lines = buffer.split('\n');
           buffer = lines.pop() || ''; // Keep the last incomplete line in buffer
 
@@ -308,9 +401,20 @@ const IDE = () => {
               }
               try {
                 const parsed = JSON.parse(dataStr);
+                
+                // Handle Terminal Logs specifically
+                if (parsed.terminal) {
+                  setTerminalLogs(prev => [...prev, { type: 'log', text: parsed.terminal }]);
+                  return; // Don't process as chat content
+                }
+
                 if (parsed.content) {
+                  if (!hasStartedMessage) {
+                    setMessages(prev => [...prev, { role: 'ai', text: '' }]);
+                    hasStartedMessage = true;
+                  }
                   fullContent += parsed.content;
-                  
+
                   // Live Extraction for UI - Enhanced AI Agent Mode
                   const parts = fullContent.split('```');
                   let chatSummary = '';
@@ -322,7 +426,7 @@ const IDE = () => {
                       // Look for file markers anywhere in the text segments
                       const fileMatch = [...part.matchAll(/###\s*FILE:\s*([^\s\n]+)/gi)].pop();
                       if (fileMatch) activeActionFile = fileMatch[1].trim();
-                      
+
                       chatSummary += part.replace(/###\s*FILE:\s*[^\s\n]+/gi, '').trim();
                     } else {
                       currentCodeStream = part;
@@ -335,6 +439,7 @@ const IDE = () => {
                     updated[updated.length - 1].text = chatSummary || 'Processing workspace...';
                     return updated;
                   });
+
 
                   // 2. Update Editor & Terminal
                   if (currentCodeStream) {
@@ -352,6 +457,18 @@ const IDE = () => {
                         updated[existingIndex].content = currentCodeStream;
                         return updated;
                       } else {
+                        // Auto-expand folders for the new file
+                        const pathParts = targetFile.split('/');
+                        if (pathParts.length > 1) {
+                            let pathAccumulator = '';
+                            const newFolders = [];
+                            for (let i = 0; i < pathParts.length - 1; i++) {
+                                pathAccumulator += (pathAccumulator ? '/' : '') + pathParts[i];
+                                newFolders.push(pathAccumulator);
+                            }
+                            setExpandedFolders(prev => Array.from(new Set([...prev, ...newFolders])));
+                        }
+
                         const newId = Date.now().toString();
                         const newFile = {
                           id: newId,
@@ -379,7 +496,35 @@ const IDE = () => {
       }
 
       // Stream completed. Extract the final code blocks and update the workspace files!
-      // New logic for ### FILE: blocks
+      
+      // 1. Process ### UPDATE: blocks (Surgical Edits)
+      const updateRegex = /### UPDATE:\s*(.+?)\s*\n<<<<\n([\s\S]*?)====\n([\s\S]*?)>>>>/g;
+      let updateMatch;
+      let updatesApplied = 0;
+      
+      setFiles(prevFiles => {
+          let updatedFiles = [...prevFiles];
+          while ((updateMatch = updateRegex.exec(fullContent)) !== null) {
+              const fileName = updateMatch[1].trim();
+              const oldCode = updateMatch[2].trim();
+              const newCode = updateMatch[3].trim();
+              
+              const fileIndex = updatedFiles.findIndex(f => f.name === fileName);
+              if (fileIndex >= 0) {
+                  // Basic string replacement
+                  if (updatedFiles[fileIndex].content.includes(oldCode)) {
+                      updatedFiles[fileIndex].content = updatedFiles[fileIndex].content.replace(oldCode, newCode);
+                      updatesApplied++;
+                      setActiveFileId(updatedFiles[fileIndex].id); // Switch to updated file
+                  } else {
+                      console.warn(`Could not find old code in ${fileName} to replace.`);
+                  }
+              }
+          }
+          return updatedFiles;
+      });
+
+      // 2. Process ### FILE: blocks (Whole file overwrite/create)
       const fileRegex = /### FILE:\s*(.+?)\s*\n\s*```[a-zA-Z]*\n([\s\S]*?)```/g;
       let match;
       let newFilesFound = [];
@@ -392,21 +537,39 @@ const IDE = () => {
           });
       }
 
-      if (newFilesFound.length > 0) {
-          setFiles(prevFiles => {
-              let updatedFiles = [...prevFiles];
-              newFilesFound.forEach(newFile => {
-                  const existingIndex = updatedFiles.findIndex(f => f.name === newFile.name);
-                  if (existingIndex >= 0) {
-                      updatedFiles[existingIndex].content = newFile.content;
-                  } else {
-                      updatedFiles.push(newFile);
-                  }
+      if (newFilesFound.length > 0 || updatesApplied > 0) {
+          if (newFilesFound.length > 0) {
+              setFiles(prevFiles => {
+                  let updatedFiles = [...prevFiles];
+                  newFilesFound.forEach(newFile => {
+                      const existingIndex = updatedFiles.findIndex(f => f.name === newFile.name);
+                      if (existingIndex >= 0) {
+                          updatedFiles[existingIndex].content = newFile.content;
+                      } else {
+                          // Auto-expand folders for the new file
+                          const pathParts = newFile.name.split('/');
+                          if (pathParts.length > 1) {
+                              let pathAccumulator = '';
+                              const newFolders = [];
+                              for (let i = 0; i < pathParts.length - 1; i++) {
+                                  pathAccumulator += (pathAccumulator ? '/' : '') + pathParts[i];
+                                  newFolders.push(pathAccumulator);
+                              }
+                              setExpandedFolders(prev => Array.from(new Set([...prev, ...newFolders])));
+                          }
+                          updatedFiles.push(newFile);
+                      }
+                  });
+                  return updatedFiles;
               });
-              return updatedFiles;
-          });
-          setActiveFileId(newFilesFound[newFilesFound.length - 1].id); // Switch to last created file
-          setTerminalLogs(prev => [...prev.filter(l => l.type !== 'stream'), { type: 'success', text: `✓ Extracted ${newFilesFound.length} files and updated IDE workspace.` }]);
+              setActiveFileId(newFilesFound[newFilesFound.length - 1].id); // Switch to last created file
+          }
+          
+          let logMsg = '';
+          if (newFilesFound.length > 0) logMsg += `✓ Created/Overwrote ${newFilesFound.length} files. `;
+          if (updatesApplied > 0) logMsg += `✓ Applied ${updatesApplied} surgical updates.`;
+          
+          setTerminalLogs(prev => [...prev.filter(l => l.type !== 'stream'), { type: 'success', text: logMsg.trim() }]);
       } else {
           // Fallback to old regex if AI didn't use ### FILE format
           const regex = /```(\w+)?\n([\s\S]*?)```/g;
@@ -456,8 +619,22 @@ const IDE = () => {
     const html = files.find(f => f.name.endsWith('.html'))?.content || '';
     const css = files.find(f => f.name.endsWith('.css'))?.content || '';
     const js = files.find(f => f.name.endsWith('.js'))?.content || '';
-    
+
     const sandboxScript = `
+      <script src="https://cdn.tailwindcss.com"></script>
+      <script>
+        tailwind.config = {
+          theme: {
+            extend: {
+              colors: {
+                primary: '#6366f1',
+                surface: '#18181b',
+                border: '#27272a',
+              }
+            }
+          }
+        }
+      </script>
       <script>
         window.onerror = function(msg, url, line) {
           window.parent.postMessage({ type: 'sandbox-err', msg: msg, line: line }, '*');
@@ -472,14 +649,13 @@ const IDE = () => {
     `;
 
     let finalHtml = html;
-    
+
     // Inject Sandbox Scripts and CSS
     if (finalHtml.includes('<head>')) {
-      finalHtml = finalHtml.replace('<head>', `<head>${sandboxScript}<style>${css}</style>`);
+      finalHtml = finalHtml.replace('<head>', `<head>${sandboxScript}<style type="text/tailwindcss">${css}</style>`);
     } else {
-      finalHtml = `${sandboxScript}<style>${css}</style>${finalHtml}`;
+      finalHtml = `${sandboxScript}<style type="text/tailwindcss">${css}</style>${finalHtml}`;
     }
-
     // Inject JS
     if (finalHtml.includes('</body>')) {
       finalHtml = finalHtml.replace('</body>', `<script>${js}</script></body>`);
@@ -495,7 +671,7 @@ const IDE = () => {
       {/* Top Navbar */}
       <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-surface shrink-0">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/')} className="text-gray-400 hover:text-white transition p-1">
+          <button onClick={handleBackNavigation} className="text-gray-400 hover:text-white transition p-1">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2">
@@ -511,7 +687,7 @@ const IDE = () => {
               {isSaving ? 'Syncing...' : 'Cloud Saved'}
             </span>
           </div>
-          <button onClick={() => downloadSingleFile(activeFile.name, activeFile.content)} className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition px-3 py-1.5 rounded-md hover:bg-white/5">
+          <button onClick={() => handleDownloadFile(activeFile.name, activeFile.content)} className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition px-3 py-1.5 rounded-md hover:bg-white/5">
             <Download className="w-4 h-4" /> File
           </button>
           <button 
@@ -522,9 +698,8 @@ const IDE = () => {
             {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderArchive className="w-4 h-4" />}
             Export ZIP
           </button>
-          <button className="flex items-center gap-2 text-sm border border-border hover:bg-white/5 text-white px-4 py-1.5 rounded-md transition">
-            <Github className="w-4 h-4" /> Push
-          </button>
+          <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
+          <ProfileBar />
         </div>
       </header>
 
@@ -534,34 +709,34 @@ const IDE = () => {
         {/* Left: AI Chat Panel */}
         <aside className={`${activeTab === 'chat' ? 'flex' : 'hidden'} md:flex w-full md:w-80 border-b md:border-b-0 md:border-r border-border bg-surface/50 flex-col shrink-0 h-full`}>
           
-          {/* Segmented Model Tab Bar */}
-          <div className="bg-surface/80 p-1.5 border-b border-border flex shrink-0 gap-1">
-            {[
-              { id: 'moonshotai/kimi-k2.6', label: 'Kimi', icon: '👷' },
-              { id: 'deepseek-ai/deepseek-v4-pro', label: 'Coder', icon: '💻' },
-              { id: 'z-ai/glm-5.1', label: 'GLM', icon: '🧠' },
-              { id: 'meta/llama3-70b-instruct', label: 'Llama', icon: '🦙' }
-            ].map(m => (
-              <button
-                key={m.id}
-                onClick={() => setSelectedModel(m.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-[9px] font-black uppercase tracking-tighter transition-all ${
-                  selectedModel === m.id 
-                  ? 'bg-background text-primary shadow-sm border border-border/50' 
-                  : 'text-gray-500 hover:bg-white/5 hover:text-gray-400'
-                }`}
-              >
-                <span>{m.icon}</span>
-                {m.label}
-              </button>
-            ))}
-          </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {isLoading && (
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] text-primary font-black uppercase tracking-widest animate-pulse">
+                    Onowl Engine Processing
+                  </span>
+                  <span className="text-[10px] text-gray-500 font-mono">
+                    {loadingProgress}%
+                  </span>
+                </div>
+                <div className="h-1.5 w-full bg-background rounded-full overflow-hidden border border-border/50">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary via-indigo-500 to-primary shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-500 ease-out"
+                    style={{ width: `${loadingProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
             {messages.map((m, i) => {
+
               let avatar = '🤖';
               if (selectedModel.includes('kimi')) avatar = '👷';
               else if (selectedModel.includes('deepseek')) avatar = '💻';
               else if (selectedModel.includes('glm')) avatar = '🧠';
+              else if (selectedModel.includes('nemotron')) avatar = '🤖';
+              else if (selectedModel.includes('minimax')) avatar = '🔮';
+              else if (selectedModel.includes('qwen')) avatar = '🐉';
               else if (selectedModel.includes('llama')) avatar = '🦙';
               if (m.role === 'user') avatar = '👤';
 
@@ -577,7 +752,32 @@ const IDE = () => {
               );
             })}
           </div>
-          <form onSubmit={handleChatSubmit} className="p-4 border-t border-border bg-surface">
+          <div className="p-4 border-t border-border bg-surface">
+            {/* Segmented Model Tab Bar */}
+            <div className="bg-background/50 p-1 rounded-lg border border-border flex shrink-0 gap-1 mb-3">
+              {[
+                { id: 'moonshotai/kimi-k2.6', label: 'Kimi', icon: '👷' },
+                { id: 'deepseek-ai/deepseek-v4-pro', label: 'Coder', icon: '💻' },
+                { id: 'z-ai/glm-5.1', label: 'GLM', icon: '🧠' },
+                { id: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'Nemotron', icon: '🤖' },
+                { id: 'minimaxai/minimax-m2.7', label: 'MiniMax', icon: '🔮' },
+                { id: 'qwen/qwen3.5-122b-a10b', label: 'Qwen', icon: '🐉' },
+                { id: 'meta/llama3-70b-instruct', label: 'Llama', icon: '🦙' }
+              ].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setSelectedModel(m.id)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-[9px] font-black uppercase tracking-tighter transition-all ${
+                    selectedModel === m.id
+                    ? 'bg-surface text-primary shadow-sm border border-border/50'
+                    : 'text-gray-500 hover:bg-white/5 hover:text-gray-400'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <form onSubmit={handleChatSubmit}>
             {selectedImage && (
               <div className="mb-2 relative inline-block">
                 <img src={selectedImage} alt="preview" className="h-16 w-16 object-cover rounded-md border border-primary/30" />
@@ -612,7 +812,7 @@ const IDE = () => {
                   type="text" 
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="Ask AI to build or search..." 
+                  placeholder="Ask AI to build..." 
                   className="w-full bg-background border border-border rounded-lg pl-4 pr-10 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-white"
                 />
                 <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 text-primary hover:text-primary/80 p-1">
@@ -620,14 +820,15 @@ const IDE = () => {
                 </button>
               </div>
             </div>
-          </form>
+            </form>
+            </div>
         </aside>
 
         {/* Center-Left: File Tree */}
         <div className={`${activeTab === 'files' ? 'flex' : 'hidden'} md:flex w-full md:w-48 border-b md:border-b-0 md:border-r border-border bg-background flex-col shrink-0 h-full`}>
-          <div className="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wider flex justify-between items-center">
+            <div className="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wider flex justify-between items-center">
             Explorer
-            <Plus 
+            <Plus
               onClick={() => {
                 const path = window.prompt('Enter path for new file or folder (folders end with /):');
                 if (path) {
@@ -648,22 +849,22 @@ const IDE = () => {
                   }
                 }
               }}
-              className="w-3 h-3 cursor-pointer hover:text-white" 
+              className="w-3 h-3 cursor-pointer hover:text-white"
             />
-          </div>
-          <div className="flex-1 overflow-y-auto px-2 py-2 select-none">
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 py-2 select-none">
             {renderFileTree(buildFileTree(files))}
-          </div>
-        </div>
+            </div>
+            </div>
 
-        {/* Center: Editor */}
-        <main className={`${activeTab === 'editor' ? 'flex' : 'hidden'} md:flex flex-1 flex-col min-w-0 bg-[#09090b] h-full shrink-0`}>
+            {/* Center: Editor */}
+            <main className={`${activeTab === 'editor' ? 'flex' : 'hidden'} md:flex flex-1 flex-col min-w-0 bg-[#09090b] h-full shrink-0`}>
           <div className="flex items-center justify-between px-4 h-10 bg-surface border-b border-border text-sm text-gray-400">
             <div className="flex items-center gap-2">
               <FileCode2 className="w-4 h-4" /> {activeFile?.name}
             </div>
             <button 
-              onClick={() => downloadSingleFile(activeFile.name, activeFile.content)}
+              onClick={() => handleDownloadFile(activeFile.name, activeFile.content)}
               className="flex items-center gap-1.5 px-2 py-1 hover:bg-white/5 rounded transition text-gray-500 hover:text-primary border border-transparent hover:border-primary/20"
             >
               <Download className="w-3.5 h-3.5" />
@@ -698,7 +899,7 @@ const IDE = () => {
             <div className="flex items-center gap-2 text-sm text-gray-400 font-medium">
               <Play className="w-4 h-4 text-green-400" /> Live Sandbox
             </div>
-            <div className="text-xs text-gray-600 font-mono bg-surface px-2 py-1 rounded">localhost:3000</div>
+            <div className="text-xs text-gray-600 font-mono bg-surface px-2 py-1 rounded">onowl-vibe-coder-production.up.railway.app</div>
           </div>
           <div className="flex-1 bg-white relative">
             <iframe 
@@ -711,8 +912,23 @@ const IDE = () => {
           
           {/* Enhanced Terminal Pane */}
           <div className="flex-1 md:h-64 border-t border-border bg-background flex flex-col min-h-0">
-            <div className="flex items-center px-4 py-2 border-b border-border gap-2 text-xs font-medium text-gray-500 uppercase">
-              <TerminalSquare className="w-3 h-3" /> Terminal Output
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border gap-2 text-xs font-medium text-gray-500 uppercase">
+              <div className="flex items-center gap-2">
+                <TerminalSquare className="w-3 h-3" /> Terminal Output
+              </div>
+              <button 
+                onClick={() => {
+                  const newWindow = window.open('', '_blank');
+                  if (newWindow) {
+                    newWindow.document.write(getPreviewHtml());
+                    newWindow.document.close();
+                  }
+                }}
+                className="text-gray-400 hover:text-white flex items-center gap-1 bg-surface hover:bg-border px-2 py-1 rounded transition-colors normal-case"
+                title="Open preview in a new browser tab"
+              >
+                <ExternalLinkIcon className="w-3 h-3" /> View in Browser
+              </button>
             </div>
             <div className="flex-1 p-3 font-mono text-[10px] md:text-xs overflow-y-auto whitespace-pre-wrap">
               {terminalLogs.map((log, index) => {
@@ -733,35 +949,34 @@ const IDE = () => {
             </div>
           </div>
         </aside>
-
       </div>
 
       {/* Mobile Tab Bar */}
       <div className="md:hidden h-16 border-t border-border bg-surface flex items-center justify-around px-2 shrink-0">
         <button 
-          onClick={() => setActiveTab('chat')}
-          className={`flex flex-col items-center gap-1 p-2 rounded-md ${activeTab === 'chat' ? 'text-primary bg-primary/10' : 'text-gray-500'}`}
+          onClick={() => setActiveTab("chat")}
+          className={`flex flex-col items-center gap-1 p-2 rounded-md ${activeTab === "chat" ? "text-primary bg-primary/10" : "text-gray-500"}`}
         >
           <MessageSquare className="w-5 h-5" />
           <span className="text-[10px] font-medium">Chat</span>
         </button>
         <button 
-          onClick={() => setActiveTab('files')}
-          className={`flex flex-col items-center gap-1 p-2 rounded-md ${activeTab === 'files' ? 'text-primary bg-primary/10' : 'text-gray-500'}`}
+          onClick={() => setActiveTab("files")}
+          className={`flex flex-col items-center gap-1 p-2 rounded-md ${activeTab === "files" ? "text-primary bg-primary/10" : "text-gray-500"}`}
         >
           <Plus className="w-5 h-5" />
           <span className="text-[10px] font-medium">Files</span>
         </button>
         <button 
-          onClick={() => setActiveTab('editor')}
-          className={`flex flex-col items-center gap-1 p-2 rounded-md ${activeTab === 'editor' ? 'text-primary bg-primary/10' : 'text-gray-500'}`}
+          onClick={() => setActiveTab("editor")}
+          className={`flex flex-col items-center gap-1 p-2 rounded-md ${activeTab === "editor" ? "text-primary bg-primary/10" : "text-gray-500"}`}
         >
           <FileCode2 className="w-5 h-5" />
           <span className="text-[10px] font-medium">Editor</span>
         </button>
         <button 
-          onClick={() => setActiveTab('preview')}
-          className={`flex flex-col items-center gap-1 p-2 rounded-md ${activeTab === 'preview' ? 'text-primary bg-primary/10' : 'text-gray-500'}`}
+          onClick={() => setActiveTab("preview")}
+          className={`flex flex-col items-center gap-1 p-2 rounded-md ${activeTab === "preview" ? "text-primary bg-primary/10" : "text-gray-500"}`}
         >
           <Play className="w-5 h-5" />
           <span className="text-[10px] font-medium">Terminal</span>

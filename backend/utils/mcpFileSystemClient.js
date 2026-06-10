@@ -3,7 +3,7 @@ const { StdioClientTransport } = require("@modelcontextprotocol/sdk/client/stdio
 const path = require('path');
 
 // Resolve the absolute path for shared storage in Termux
-const SHARED_ROOT = '/data/data/com.termux/files/home/storage/shared';
+const SHARED_ROOT = path.join(__dirname, '../../ai-workspace');
 
 let client = null;
 let transport = null;
@@ -62,23 +62,20 @@ async function callTool(name, args) {
  */
 const mcpFs = {
     createFolder: async (folderPath) => {
-        return await callTool("create_directory", { path: folderPath });
+        const absolutePath = path.isAbsolute(folderPath) ? folderPath : path.join(SHARED_ROOT, folderPath);
+        return await callTool("create_directory", { path: absolutePath });
     },
     createFile: async (filePath, content) => {
-        // Ensure parent directories exist
-        const parts = filePath.split('/');
-        if (parts.length > 1) {
-            let currentPath = '';
-            for (let i = 0; i < parts.length - 1; i++) {
-                currentPath += (currentPath ? '/' : '') + parts[i];
-                try {
-                    await callTool("create_directory", { path: currentPath });
-                } catch (err) {
-                    // Ignore if directory already exists
-                }
-            }
+        const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(SHARED_ROOT, filePath);
+        const dir = path.dirname(absolutePath);
+        
+        try {
+            await callTool("create_directory", { path: dir });
+        } catch (err) {
+            // Ignore if directory already exists
         }
-        return await callTool("write_file", { path: filePath, content });
+
+        return await callTool("write_file", { path: absolutePath, content });
     },
     updateFile: async (filePath, content) => {
         return await mcpFs.createFile(filePath, content);

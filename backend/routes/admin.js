@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { getStats } = require('../utils/statsStore');
+const { getApiKeyStats } = require('../utils/apiKeyManager');
 const { supabase } = require('../utils/supabase');
 const router = express.Router();
 
@@ -51,49 +52,125 @@ router.post('/login', (req, res) => {
 /**
  * GET /api/admin/stats
  * Returns real-time API usage, responsiveness metrics, and database stats.
+ * Optimized for speed using server-side counts and filtering.
  */
 router.get('/stats', adminAuth, async (req, res) => {
     try {
         const aiStats = getStats();
         
-        // Fetch Database Stats from Supabase
-        let totalUsers = 0;
-        let activeWorkspaces = 0;
-        let usersList = [];
+        let metrics = {
+            totalUsers: 0,
+            activeUsersToday: 0,
+            newUsersThisWeek: 0,
+            totalProjects: 0,
+            activeProjects: 0,
+            freeUsers: 0,
+            paidUsers: 0,
+            usersList: []
+        };
 
         try {
-            // Get user count (Requires Service Role Key)
-            const { data: usersData, error: userError } = await supabase.auth.admin.listUsers();
-            if (!userError && usersData && usersData.users) {
-                totalUsers = usersData.users.length;
-                usersList = usersData.users.map(u => ({
-                    id: u.id,
-                    email: u.email,
-                    created_at: u.created_at,
-                    last_sign_in_at: u.last_sign_in_at
-                }));
-            }
+            const now = new Date();
+            const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-            // Get workspace count
-            const { count: workspaceCount, error: wsError } = await supabase
-                .from('workspaces')
-                .select('*', { count: 'exact', head: true });
-            if (!wsError) activeWorkspaces = workspaceCount || 0;
+            // Parallelize independent count queries for performance
+            const [
+                totalUsersResult,
+                activeTodayResult,
+                newWeekResult,
+                freePlanResult,
+                totalProjectsResult,
+                activeProjectsResult,
+                usersListResult
+            ] = await Promise.all([
+                supabase.from('profiles').select('*', { count: 'exact', head: true }),
+                supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('updated_at', todayStart),
+                supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', oneWeekAgo),
+                supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('plan', 'free'),
+                supabase.from('workspaces').select('*', { count: 'exact', head: true }),
+                supabase.from('workspaces').select('*', { count: 'exact', head: true }).gte('updated_at', oneWeekAgo),
+                supabase.auth.admin.listUsers() // Still needed for the Users tab
+            ]);
+
+            metrics.totalUsers = totalUsersResult.count || 0;
+            metrics.activeUsersToday = activeTodayResult.count || 0;
+            metrics.newUsersThisWeek = newWeekResult.count || 0;
+            metrics.freeUsers = freePlanResult.count || 0;
+            metrics.paidUsers = Math.max(0, metrics.totalUsers - metrics.freeUsers);
+            
+            metrics.totalProjects = totalProjectsResult.count || 0;
+            metrics.activeProjects = activeProjectsResult.count || 0;
+            
+            // Limit users list to avoid huge payloads
+            const authUsers = usersListResult.data?.users?.slice(0, 100) || [];
+            
+            // Fetch plans for these users from profiles table
+            const userIds = authUsers.map(u => u.id);
+            const { data: profiles } = await supabase
+                .from('profiles')
+                .select('id, plan')
+                .in('id', userIds);
+
+            // Merge plan info into authUsers
+            metrics.usersList = authUsers.map(user => {
+                const profile = profiles?.find(p => p.id === user.id);
+                return {
+                    ...user,
+                    plan: profile?.plan || 'free'
+                };
+            });
+
         } catch (dbErr) {
-            console.error('[Admin DB Error]:', dbErr.message);
+            console.error('[Admin DB Stats Error]:', dbErr.message);
         }
 
         res.status(200).json({
             success: true,
             data: {
                 ...aiStats,
-                db_users: totalUsers,
-                db_workspaces: activeWorkspaces,
-                users_list: usersList
+                metrics,
+                users_list: metrics.usersList,
+                api_keys: await getApiKeyStats()
             }
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+/**
+ * PATCH /api/admin/users/:id/plan
+ * Updates a user's subscription plan in the profiles table.
+ */
+router.patch('/users/:id/plan', adminAuth, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { plan } = req.body;
+
+        if (!userId || !plan) {
+            return res.status(400).json({ success: false, error: 'User ID and Plan are required' });
+        }
+
+        const validPlans = ['free', 'pro', 'premium', 'business'];
+        if (!validPlans.includes(plan.toLowerCase())) {
+            return res.status(400).json({ success: false, error: 'Invalid plan type' });
+        }
+
+        const { error } = await supabase
+            .from('profiles')
+            .update({ plan: plan.toLowerCase() })
+            .eq('id', userId);
+
+        if (error) {
+            console.error('[Admin Update Plan Error]:', error.message);
+            return res.status(500).json({ success: false, error: error.message });
+        }
+
+        res.status(200).json({ success: true, message: `User plan updated to ${plan}` });
+    } catch (err) {
+        console.error('[Admin Update Plan Exception]:', err.message);
+        res.status(500).json({ success: false, error: 'Internal server error during plan update' });
     }
 });
 

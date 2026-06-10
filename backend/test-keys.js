@@ -4,7 +4,10 @@ const OpenAI = require('openai');
 const models = [
     { name: 'Kimi', modelId: 'moonshotai/kimi-k2.6', apiKey: process.env.KIMI_API_KEY },
     { name: 'DeepSeek', modelId: 'deepseek-ai/deepseek-v4-pro', apiKey: process.env.DEEPSEEK_API_KEY },
-    { name: 'GLM', modelId: 'z-ai/glm-5.1', apiKey: process.env.NVIDIA_NIM_API_KEY }
+    { name: 'GLM', modelId: 'z-ai/glm-5.1', apiKey: process.env.NVIDIA_NIM_API_KEY },
+    { name: 'Nemotron', modelId: 'nvidia/nemotron-3-ultra-550b-a55b', apiKey: process.env.NEMOTRON_API_KEY },
+    { name: 'MiniMax', modelId: 'minimaxai/minimax-m2.7', apiKey: process.env.MINIMAX_API_KEY },
+    { name: 'Qwen', modelId: 'qwen/qwen3.5-122b-a10b', apiKey: process.env.QWEN_API_KEY }
 ];
 
 async function testKeys() {

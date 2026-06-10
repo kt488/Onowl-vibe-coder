@@ -1,16 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Box, Mail, Lock, Loader2, ArrowLeft, Github } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 const Auth = () => {
+  const { user } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -21,11 +33,18 @@ const Auth = () => {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate('/ide');
+        navigate('/dashboard');
       } else {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: {
+            data: { name, mobile, age, gender }
+          }
+        });
         if (error) throw error;
-        alert('Check your email for the confirmation link!');
+        alert('Account created! You can now log in.');
+        setIsLogin(true);
       }
     } catch (err) {
       setError(err.message);
@@ -79,6 +98,34 @@ const Auth = () => {
                 />
               </div>
             </div>
+
+            {!isLogin && (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">Full Name</label>
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} required placeholder="John Doe" className="w-full bg-black/40 border border-border rounded-xl px-4 py-3.5 text-white focus:border-primary/50 outline-none transition" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">Mobile Number</label>
+                  <input type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} required placeholder="+1234567890" className="w-full bg-black/40 border border-border rounded-xl px-4 py-3.5 text-white focus:border-primary/50 outline-none transition" />
+                </div>
+                <div className="flex gap-4">
+                    <div className="flex-1">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">Age</label>
+                      <input type="number" value={age} onChange={(e) => setAge(e.target.value)} required placeholder="25" className="w-full bg-black/40 border border-border rounded-xl px-4 py-3.5 text-white focus:border-primary/50 outline-none transition" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">Gender</label>
+                      <select value={gender} onChange={(e) => setGender(e.target.value)} required className="w-full bg-black/40 border border-border rounded-xl px-4 py-3.5 text-white focus:border-primary/50 outline-none transition">
+                          <option value="">Select</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                      </select>
+                    </div>
+                </div>
+              </>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">Password</label>
