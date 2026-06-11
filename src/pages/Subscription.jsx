@@ -38,7 +38,7 @@ const Subscription = () => {
     const selectedPlan = PLANS.find(p => p.name === planName);
     const numericPrice = selectedPlan ? parseInt(selectedPlan.price.replace(/[^0-9]/g, ''), 10) || 0 : 0;
     
-    navigate('/payment', { state: { plan: { name: selectedPlan.label, price: numericPrice } } });
+    navigate('/upi-payment', { state: { amount: numericPrice, planName: selectedPlan.label } });
   };
 
   if (loading) {

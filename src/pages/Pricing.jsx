@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Check, Star, ChevronDown, ChevronUp, Zap, Shield, Rocket, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -57,6 +58,10 @@ const Pricing = () => {
 
   return (
     <div className="min-h-screen bg-background text-white py-24 px-4 relative overflow-hidden">
+      <Helmet>
+        <title>Pricing Plans - Onowl AI Coding Platform</title>
+        <meta name="description" content="Choose the perfect Onowl plan to supercharge your coding workflow. Affordable options from Free to Business for solo developers and large teams." />
+      </Helmet>
       {/* Background Glowing Blobs */}
       <div className="absolute top-[10%] left-[-10%] w-[50%] h-[50%] bg-primary/10 rounded-full blur-[120px] animate-pulse" />
       <div className="absolute bottom-[10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Mail, MessageSquare, Send, ArrowLeft, Phone, MapPin, Globe } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -26,6 +27,10 @@ const ContactUs = () => {
 
   return (
     <div className="min-h-screen bg-background text-gray-200 selection:bg-primary/30 selection:text-white">
+      <Helmet>
+        <title>Contact Onowl - Get in Touch with Our Team</title>
+        <meta name="description" content="Get in touch with the Onowl team. Whether you have questions about our AI coding platform, enterprise features, or need support, we're here to help." />
+      </Helmet>
       {/* Background Decor */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 blur-[120px] rounded-full" />

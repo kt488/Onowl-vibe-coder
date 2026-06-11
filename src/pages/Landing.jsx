@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Terminal, Zap, Code2, Download, Box, ShieldCheck, Github, Menu, X } from 'lucide-react';
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { supabase } from '../utils/supabase';
@@ -52,6 +53,10 @@ const Landing = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col w-full overflow-x-hidden">
+      <Helmet>
+        <title>Onowl - AI-Powered Coding Platform for Developers</title>
+        <meta name="description" content="Build, test, and deploy applications faster with Onowl's AI-powered coding assistance. The premium AI-powered coding environment for modern developers." />
+      </Helmet>
       {/* Scroll Progress Bar */}
       <motion.div 
         className="fixed top-0 left-0 right-0 h-1 bg-primary z-[60] origin-left"

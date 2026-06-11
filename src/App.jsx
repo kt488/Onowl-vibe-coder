@@ -11,6 +11,7 @@ import Auth from './pages/Auth';
 import ContactUs from './pages/ContactUs';
 import Settings from './pages/Settings';
 import Subscription from './pages/Subscription';
+import UPIPayment from './pages/UPIPayment';
 import Terms from './pages/Terms';
 import Pricing from './pages/Pricing';
 
@@ -26,40 +27,21 @@ function App() {
         <AuthProvider>
           <Routes>
             <Route path="/" element={<Landing />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/contact" element={<ContactUs />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/pricing" element={<Pricing />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/contact" element={<ContactUs />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/pricing" element={<Pricing />} />
 
-          <Route path="/create" element={<CreateWebsite />} />
-          <Route path="/admin" element={<Admin />} />
-          
-          <Route path="/ide" element={
-            <ProtectedRoute>
-              <IDE />
-            </ProtectedRoute>
-          } />
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/projects" element={
-            <ProtectedRoute>
-              <Projects />
-            </ProtectedRoute>
-          } />
-          <Route path="/settings" element={
-            <ProtectedRoute>
-              <Settings />
-            </ProtectedRoute>
-          } />
-          <Route path="/subscription" element={
-            <ProtectedRoute>
-              <Subscription />
-            </ProtectedRoute>
-          } />
-        </Routes>
+            {/* Protected Routes */}
+            <Route path="/create" element={<ProtectedRoute><CreateWebsite /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+            <Route path="/ide" element={<ProtectedRoute><IDE /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
+            <Route path="/upi-payment" element={<ProtectedRoute><UPIPayment /></ProtectedRoute>} />
+          </Routes>
         </AuthProvider>
         </ErrorBoundary>
         </>
