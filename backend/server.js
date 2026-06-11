@@ -21,7 +21,7 @@ app.use(express.static(path.join(__dirname, '../dist')));
 // Enable CORS securely - restricts access to the specified frontend origin
 app.use(cors({
     origin: process.env.CORS_ORIGIN || '*', 
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 

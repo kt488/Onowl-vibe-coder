@@ -74,7 +74,7 @@ const ContactUs = () => {
               </div>
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-widest text-gray-500 mb-1">Email Us</h3>
-                <p className="text-white font-medium">support@onowl.ai</p>
+                <p className="text-white font-medium">Onowl.io25@gmail.com</p>
                 <p className="text-xs text-gray-500 mt-1">Typical response time: 2 hours</p>
               </div>
             </div>
