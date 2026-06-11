@@ -18,10 +18,12 @@ const IDE = () => {
   const initialPrompt = location.state?.initialPrompt || '';
   const isCreateNew = location.state?.createNew || false;
   const loadWorkspaceId = location.state?.workspaceId || null;
+
   const hasFetchedInitial = useRef(false);
   const terminalEndRef = useRef(null);
 
   const [workspaceId, setWorkspaceId] = useState(null);
+  console.log('IDE Component rendered, workspaceId:', workspaceId);
   const [isSaving, setIsSaving] = useState(false);
   const [userPlan, setUserPlan] = useState('free');
 
@@ -153,12 +155,20 @@ const IDE = () => {
 
   // Save to DB
   const saveWorkspace = async () => {
+    console.log('saveWorkspace triggered, workspaceId:', workspaceId);
     if (!workspaceId) return;
     setIsSaving(true);
-    await supabase
+    const { data, error } = await supabase
       .from('workspaces')
       .update({ files, chat_history: messages, terminal_logs: terminalLogs, updated_at: new Date() })
       .eq('id', workspaceId);
+    
+    if (error) {
+      console.error('Error saving workspace:', error);
+    } else {
+      console.log('Workspace saved successfully:', data);
+    }
+    
     setTimeout(() => setIsSaving(false), 500);
   };
 
@@ -687,6 +697,17 @@ const IDE = () => {
               {isSaving ? 'Syncing...' : 'Cloud Saved'}
             </span>
           </div>
+          
+          <button 
+            onClick={saveWorkspace}
+            disabled={isSaving || !workspaceId}
+            className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition px-3 py-1.5 rounded-md hover:bg-white/5 disabled:opacity-50"
+          >
+            <Save className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
+            Save Project
+          </button>
+          
+          <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
           <button onClick={() => handleDownloadFile(activeFile.name, activeFile.content)} className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition px-3 py-1.5 rounded-md hover:bg-white/5">
             <Download className="w-4 h-4" /> File
           </button>

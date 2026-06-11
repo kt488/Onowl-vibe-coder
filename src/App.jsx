@@ -14,6 +14,7 @@ import Subscription from './pages/Subscription';
 import UPIPayment from './pages/UPIPayment';
 import Terms from './pages/Terms';
 import Pricing from './pages/Pricing';
+import Support from './pages/Support';
 
 import { Toaster } from 'react-hot-toast';
 import ErrorBoundary from './ErrorBoundary';
@@ -31,6 +32,7 @@ function App() {
             <Route path="/contact" element={<ContactUs />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/pricing" element={<Pricing />} />
+            <Route path="/support" element={<Support />} />
 
             {/* Protected Routes */}
             <Route path="/create" element={<ProtectedRoute><CreateWebsite /></ProtectedRoute>} />
