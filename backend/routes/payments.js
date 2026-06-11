@@ -15,9 +15,20 @@ const adminOnly = async (req, res, next) => {
 // POST /api/payments - Submit new payment
 router.post('/', async (req, res) => {
     const { plan_name, amount, utr, screenshot_url } = req.body;
-    const userId = req.user?.id;
+    const authHeader = req.headers.authorization;
 
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!authHeader) {
+        return res.status(401).json({ error: 'Unauthorized: Missing authorization header' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+
+    const userId = user.id;
 
     try {
         const { data, error } = await supabase.from('payments').insert({

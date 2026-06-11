@@ -90,8 +90,12 @@ router.get('/stats', adminAuth, async (req, res) => {
                 supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('plan', 'free'),
                 supabase.from('workspaces').select('*', { count: 'exact', head: true }),
                 supabase.from('workspaces').select('*', { count: 'exact', head: true }).gte('updated_at', oneWeekAgo),
-                supabase.auth.admin.listUsers() // Still needed for the Users tab
+                supabase.auth.admin.listUsers()
             ]);
+
+            if (totalUsersResult.error) console.error('totalUsersResult error:', totalUsersResult.error);
+            if (activeTodayResult.error) console.error('activeTodayResult error:', activeTodayResult.error);
+            if (usersListResult.error) console.error('usersListResult error:', usersListResult.error);
 
             metrics.totalUsers = totalUsersResult.count || 0;
             metrics.activeUsersToday = activeTodayResult.count || 0;
@@ -105,12 +109,14 @@ router.get('/stats', adminAuth, async (req, res) => {
             // Limit users list to avoid huge payloads
             const authUsers = usersListResult.data?.users?.slice(0, 100) || [];
             
-            // Fetch plans for these users from profiles table
             const userIds = authUsers.map(u => u.id);
-            const { data: profiles } = await supabase
+            const { data: profiles, error: pError } = await supabase
                 .from('profiles')
                 .select('id, plan')
                 .in('id', userIds);
+
+            if (pError) console.error('[Stats Profiles Query Error]:', pError);
+            else console.log(`[Stats] Found ${profiles?.length || 0} profiles`);
 
             // Merge plan info into authUsers
             metrics.usersList = authUsers.map(user => {
@@ -163,8 +169,8 @@ router.patch('/users/:id/plan', adminAuth, async (req, res) => {
             .eq('id', userId);
 
         if (error) {
-            console.error('[Admin Update Plan Error]:', error.message);
-            return res.status(500).json({ success: false, error: error.message });
+            console.error('[Admin Update Plan Error]:', error);
+            return res.status(500).json({ success: false, error: error.message || 'Database error during plan update' });
         }
 
         res.status(200).json({ success: true, message: `User plan updated to ${plan}` });

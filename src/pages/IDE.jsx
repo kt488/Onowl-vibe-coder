@@ -415,7 +415,7 @@ const IDE = () => {
                 // Handle Terminal Logs specifically
                 if (parsed.terminal) {
                   setTerminalLogs(prev => [...prev, { type: 'log', text: parsed.terminal }]);
-                  return; // Don't process as chat content
+                  continue; // Correctly continue to next line instead of exiting function
                 }
 
                 if (parsed.content) {

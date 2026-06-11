@@ -271,10 +271,37 @@ Always explain your changes briefly before outputting the code blocks.` + cached
             }
         }
 
-        // ... (Post-stream logic: Commands, Files, Stats, cleanup)
+        // Post-stream logic: Commands, Files, Stats, cleanup
+        console.log("[Chat] Stream consumption completed. Full length:", fullContent.length);
+        const duration = Date.now() - startTime;
+        incrementSuccess(model, duration);
+
+        // Basic command extraction logic (example)
+        const commandMatch = fullContent.match(/### RUN:\s*(.+)/);
+        if (commandMatch && commandMatch[1]) {
+            const command = commandMatch[1].trim();
+            sendUpdate(`➜  Executing: ${command}`, 'terminal');
+            
+            executeCommand(command, [], (data) => {
+                sendUpdate(data, 'terminal');
+            }, (code) => {
+                sendUpdate(`➜  Command exited with code ${code}`, 'terminal');
+            });
+        }
+
         res.end();
     } catch (err) {
-        // ... (error handling)
+        console.error("[Chat Error]:", err);
+        incrementFailure();
+        
+        // If headers haven't been sent yet, send a JSON error
+        if (!res.headersSent) {
+            res.status(500).json({ success: false, error: err.message });
+        } else {
+            // If we are in middle of a stream, send an error event
+            res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+            res.end();
+        }
     }
 });
 
