@@ -335,7 +335,7 @@ const IDE = () => {
     });
   };
 
-  const streamAIResponse = async (chatHistory) => {
+  const fetchAIResponse = async (chatHistory) => {
     setTerminalLogs(prev => [...prev, { type: 'sys', text: '➜  AI Engine started compiling code...' }]);
     setIsLoading(true);
     setLoadingProgress(10);
@@ -378,238 +378,102 @@ const IDE = () => {
       }, 500);
 
       if (response.status === 429) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Daily limit reached.');
+        throw new Error('Daily limit reached.');
       }
       if (!response.ok) throw new Error('Failed to connect to AI backend.');
 
       // Clear image after sending
       setSelectedModelImage(null);
 
+      // Handle Streaming
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let done = false;
       let fullContent = '';
-      let buffer = ''; // Buffer for fragmented lines
-      let hasStartedMessage = false;
+      
+      // Initialize Assistant Message
+      setMessages(prev => [...prev, { role: 'ai', text: '' }]);
 
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          buffer += decoder.decode(value, { stream: true });
-
-          let lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep the last incomplete line in buffer
-
-          for (const line of lines) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        
+        // Very basic SSE chunk parsing - needs adaptation if backend emits raw stream
+        const lines = chunk.split('\\n');
+        for (const line of lines) {
             if (line.startsWith('data: ')) {
-              const dataStr = line.replace('data: ', '').trim();
-              if (dataStr === '[DONE]') {
-                done = true;
-                break;
-              }
-              try {
-                const parsed = JSON.parse(dataStr);
-                
-                // Handle Terminal Logs specifically
-                if (parsed.terminal) {
-                  setTerminalLogs(prev => [...prev, { type: 'log', text: parsed.terminal }]);
-                  continue; // Correctly continue to next line instead of exiting function
-                }
-
-                if (parsed.content) {
-                  if (!hasStartedMessage) {
-                    setMessages(prev => [...prev, { role: 'ai', text: '' }]);
-                    hasStartedMessage = true;
-                  }
-                  fullContent += parsed.content;
-
-                  // Live Extraction for UI - Enhanced AI Agent Mode
-                  const parts = fullContent.split('```');
-                  let chatSummary = '';
-                  let currentCodeStream = '';
-                  let activeActionFile = '';
-
-                  parts.forEach((part, i) => {
-                    if (i % 2 === 0) {
-                      // Look for file markers anywhere in the text segments
-                      const fileMatch = [...part.matchAll(/###\s*FILE:\s*([^\s\n]+)/gi)].pop();
-                      if (fileMatch) activeActionFile = fileMatch[1].trim();
-
-                      chatSummary += part.replace(/###\s*FILE:\s*[^\s\n]+/gi, '').trim();
-                    } else {
-                      currentCodeStream = part;
-                    }
-                  });
-
-                  // 1. Update Chat (Logic only)
-                  setMessages(prev => {
-                    const updated = [...prev];
-                    updated[updated.length - 1].text = chatSummary || 'Processing workspace...';
-                    return updated;
-                  });
-
-
-                  // 2. Update Editor & Terminal
-                  if (currentCodeStream) {
-                    const targetFile = activeActionFile || 'autonomous_build.js';
+                const jsonStr = line.slice(6);
+                if (jsonStr === '[DONE]') continue;
+                try {
+                    const data = JSON.parse(jsonStr);
+                    const content = data.choices[0]?.delta?.content || '';
+                    fullContent += content;
                     
-                    setTerminalLogs(prev => {
-                       const cleanPrev = prev.filter(l => l.type !== 'stream');
-                       return [...cleanPrev, { type: 'stream', text: `➜  [BUILD] Writing to ${targetFile}...` }];
+                    // Update UI live
+                    setMessages(prev => {
+                        const newMsgs = [...prev];
+                        newMsgs[newMsgs.length - 1].text = fullContent;
+                        return newMsgs;
                     });
-
-                    setFiles(prevFiles => {
-                      const existingIndex = prevFiles.findIndex(f => f.name === targetFile);
-                      if (existingIndex >= 0) {
-                        const updated = [...prevFiles];
-                        updated[existingIndex].content = currentCodeStream;
-                        return updated;
-                      } else {
-                        // Auto-expand folders for the new file
-                        const pathParts = targetFile.split('/');
-                        if (pathParts.length > 1) {
-                            let pathAccumulator = '';
-                            const newFolders = [];
-                            for (let i = 0; i < pathParts.length - 1; i++) {
-                                pathAccumulator += (pathAccumulator ? '/' : '') + pathParts[i];
-                                newFolders.push(pathAccumulator);
-                            }
-                            setExpandedFolders(prev => Array.from(new Set([...prev, ...newFolders])));
-                        }
-
-                        const newId = Date.now().toString();
-                        const newFile = {
-                          id: newId,
-                          name: targetFile,
-                          language: targetFile.split('.').pop() === 'js' ? 'javascript' : targetFile.split('.').pop() === 'jsx' ? 'javascript' : targetFile.split('.').pop(),
-                          content: currentCodeStream
-                        };
-                        return [...prevFiles, newFile];
-                      }
-                    });
-                    
-                    // Auto-switch to the file being built if needed
-                    const targetId = files.find(f => f.name === targetFile)?.id;
-                    if (targetId && targetId !== activeFileId) {
-                       setActiveFileId(targetId);
-                    }
-                  }
+                } catch (e) {
+                    // Ignore parse errors on partial chunks
                 }
-              } catch (err) {
-                console.error("Parse error:", err);
-              }
             }
-          }
         }
       }
-
-      // Stream completed. Extract the final code blocks and update the workspace files!
-      
-      // 1. Process ### UPDATE: blocks (Surgical Edits)
-      const updateRegex = /### UPDATE:\s*(.+?)\s*\n<<<<\n([\s\S]*?)====\n([\s\S]*?)>>>>/g;
-      let updateMatch;
-      let updatesApplied = 0;
-      
-      setFiles(prevFiles => {
-          let updatedFiles = [...prevFiles];
-          while ((updateMatch = updateRegex.exec(fullContent)) !== null) {
-              const fileName = updateMatch[1].trim();
-              const oldCode = updateMatch[2].trim();
-              const newCode = updateMatch[3].trim();
-              
-              const fileIndex = updatedFiles.findIndex(f => f.name === fileName);
-              if (fileIndex >= 0) {
-                  // Basic string replacement
-                  if (updatedFiles[fileIndex].content.includes(oldCode)) {
-                      updatedFiles[fileIndex].content = updatedFiles[fileIndex].content.replace(oldCode, newCode);
-                      updatesApplied++;
-                      setActiveFileId(updatedFiles[fileIndex].id); // Switch to updated file
+                });
+                
+                setFiles(prevFiles => {
+                  const existingIndex = prevFiles.findIndex(f => f.name === targetFile);
+                  if (existingIndex >= 0) {
+                    const updated = [...prevFiles];
+                    updated[existingIndex].content = block.code;
+                    return updated;
                   } else {
-                      console.warn(`Could not find old code in ${fileName} to replace.`);
+                    // Auto-expand folders for the new file
+                    const pathParts = targetFile.split('/');
+                    if (pathParts.length > 1) {
+                        let pathAccumulator = '';
+                        const newFolders = [];
+                        for (let i = 0; i < pathParts.length - 1; i++) {
+                            pathAccumulator += (pathAccumulator ? '/' : '') + pathParts[i];
+                            newFolders.push(pathAccumulator);
+                        }
+                        setExpandedFolders(prev => Array.from(new Set([...prev, ...newFolders])));
+                    }
+
+                    const newId = Date.now().toString();
+                    const newFile = {
+                      id: newId,
+                      name: targetFile,
+                      language: targetFile.split('.').pop() === 'js' ? 'javascript' : targetFile.split('.').pop() === 'jsx' ? 'javascript' : targetFile.split('.').pop(),
+                      content: block.code
+                    };
+                    return [...prevFiles, newFile];
                   }
-              }
-          }
-          return updatedFiles;
-      });
-
-      // 2. Process ### FILE: blocks (Whole file overwrite/create)
-      const fileRegex = /### FILE:\s*(.+?)\s*\n\s*```[a-zA-Z]*\n([\s\S]*?)```/g;
-      let match;
-      let newFilesFound = [];
-      while ((match = fileRegex.exec(fullContent)) !== null) {
-          newFilesFound.push({
-              id: Date.now().toString() + Math.random().toString(36).substring(7),
-              name: match[1].trim(),
-              language: match[1].trim().split('.').pop() === 'js' ? 'javascript' : match[1].trim().split('.').pop() === 'jsx' ? 'javascript' : match[1].trim().split('.').pop(),
-              content: match[2].trim()
-          });
-      }
-
-      if (newFilesFound.length > 0 || updatesApplied > 0) {
-          if (newFilesFound.length > 0) {
-              setFiles(prevFiles => {
-                  let updatedFiles = [...prevFiles];
-                  newFilesFound.forEach(newFile => {
-                      const existingIndex = updatedFiles.findIndex(f => f.name === newFile.name);
-                      if (existingIndex >= 0) {
-                          updatedFiles[existingIndex].content = newFile.content;
-                      } else {
-                          // Auto-expand folders for the new file
-                          const pathParts = newFile.name.split('/');
-                          if (pathParts.length > 1) {
-                              let pathAccumulator = '';
-                              const newFolders = [];
-                              for (let i = 0; i < pathParts.length - 1; i++) {
-                                  pathAccumulator += (pathAccumulator ? '/' : '') + pathParts[i];
-                                  newFolders.push(pathAccumulator);
-                              }
-                              setExpandedFolders(prev => Array.from(new Set([...prev, ...newFolders])));
-                          }
-                          updatedFiles.push(newFile);
-                      }
-                  });
-                  return updatedFiles;
-              });
-              setActiveFileId(newFilesFound[newFilesFound.length - 1].id); // Switch to last created file
-          }
-          
-          let logMsg = '';
-          if (newFilesFound.length > 0) logMsg += `✓ Created/Overwrote ${newFilesFound.length} files. `;
-          if (updatesApplied > 0) logMsg += `✓ Applied ${updatesApplied} surgical updates.`;
-          
-          setTerminalLogs(prev => [...prev.filter(l => l.type !== 'stream'), { type: 'success', text: logMsg.trim() }]);
-      } else {
-          // Fallback to old regex if AI didn't use ### FILE format
-          const regex = /```(\w+)?\n([\s\S]*?)```/g;
-          let extractedBlocks = [];
-          let fallbackMatch;
-          while ((fallbackMatch = regex.exec(fullContent)) !== null) {
-            extractedBlocks.push({ lang: fallbackMatch[1] || 'text', code: fallbackMatch[2].trim() });
-          }
-
-          if (extractedBlocks.length > 0) {
-            updateFilesInWorkspace(extractedBlocks);
-            setTerminalLogs(prev => [...prev.filter(l => l.type !== 'stream'), { type: 'success', text: `✓ Extracted ${extractedBlocks.length} code blocks and updated workspace.` }]);
+                });
+            });
+            setTerminalLogs(prev => [...prev, { type: 'success', text: `✓  [SUCCESS] Wrote ${extractedBlocks.length} files.` }]);
           } else {
-            setTerminalLogs(prev => [...prev.filter(l => l.type !== 'stream'), { type: 'info', text: `ℹ Stream completed. No code blocks detected.` }]);
+             setTerminalLogs(prev => prev.filter(l => l.type !== 'stream'));
           }
+      } else {
+          setTerminalLogs(prev => prev.filter(l => l.type !== 'stream'));
       }
-
-    } catch (err) {
-      setMessages(prev => {
-         const updated = [...prev];
-         updated[updated.length - 1].text = `Error: ${err.message}`;
-         return updated;
-      });
+    } catch (error) {
+      clearInterval(progressInterval);
+      setLoadingProgress(0);
+      setIsLoading(false);
+      setTerminalLogs(prev => prev.filter(l => l.type !== 'stream'));
+      setTerminalLogs(prev => [...prev, { type: 'error', text: `[SYSTEM ERROR] ${error.message}` }]);
     }
   };
 
   useEffect(() => {
     if (initialPrompt && !hasFetchedInitial.current) {
       hasFetchedInitial.current = true;
-      streamAIResponse(messages);
+      fetchAIResponse(messages);
     }
   }, [initialPrompt]);
 
@@ -621,7 +485,7 @@ const IDE = () => {
     setMessages(newMessages);
     setChatInput('');
 
-    await streamAIResponse(newMessages);
+    await fetchAIResponse(newMessages);
   };
 
   // Construct iframe srcDoc based on files with Sandbox Interceptors

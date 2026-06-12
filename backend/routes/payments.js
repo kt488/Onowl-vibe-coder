@@ -2,13 +2,27 @@ const express = require('express');
 const { supabase } = require('../utils/supabase');
 const router = express.Router();
 
-// Middleware to check for admin role (assuming plan = 'admin' in profiles)
-const adminOnly = async (req, res, next) => {
-    // In a real app, use auth middleware to get UID
-    // For now, assume req.user is set by auth middleware
-    const userId = req.user?.id; 
-    const { data: profile } = await supabase.from('profiles').select('plan').eq('id', userId).single();
-    if (profile?.plan !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+// Middleware to check for admin or staff role
+const staffOrAdminOnly = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return res.status(401).json({ error: 'Unauthorized: Missing authorization header' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+
+    // Check user profile for admin or staff
+    const { data: profile } = await supabase.from('profiles').select('plan').eq('id', user.id).single();
+    if (profile?.plan !== 'admin' && profile?.plan !== 'staff') {
+        return res.status(403).json({ error: 'Forbidden: Requires staff or admin role' });
+    }
+    
+    req.user = user;
     next();
 };
 
@@ -36,7 +50,8 @@ router.post('/', async (req, res) => {
             plan_name,
             amount,
             utr,
-            screenshot_url
+            screenshot_url,
+            payment_method: 'UPI'
         });
         if (error) throw error;
         res.status(201).json({ success: true, data });
@@ -45,20 +60,97 @@ router.post('/', async (req, res) => {
     }
 });
 
-// GET /api/admin/payments - View all (Admin Only)
-router.get('/admin', adminOnly, async (req, res) => {
+// GET /api/payments/copanel - View all payments with user details (Staff & Admin)
+router.get('/copanel', staffOrAdminOnly, async (req, res) => {
     try {
-        const { data, error } = await supabase.from('payments').select('*');
-        if (error) throw error;
-        res.json({ success: true, data });
+        // Fetch payments with linked profile data
+        const { data: payments, error: payError } = await supabase
+            .from('payments')
+            .select(`
+                *,
+                profiles:user_id (
+                    name,
+                    plan
+                )
+            `)
+            .order('created_at', { ascending: false });
+            
+        if (payError) throw payError;
+
+        // Fetch auth users to get emails
+        const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
+        if (usersError) console.error("Error fetching users for emails:", usersError);
+
+        const emailMap = {};
+        if (users) {
+            users.forEach(u => emailMap[u.id] = u.email);
+        }
+
+        // Map the results
+        const enrichedPayments = payments.map(p => ({
+            ...p,
+            username: p.profiles?.name || 'Unknown',
+            current_plan: p.profiles?.plan || 'Unknown',
+            email: emailMap[p.user_id] || 'N/A'
+        }));
+
+        res.json({ success: true, data: enrichedPayments });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// POST /api/admin/payments/:id/verify - Approve/Reject (Admin Only)
-router.post('/admin/:id/verify', adminOnly, async (req, res) => {
-    const { status, rejection_reason } = req.body; // status: 'approved' | 'rejected'
+// GET /api/payments/copanel/stats - Get Revenue and Sub stats (Staff & Admin)
+router.get('/copanel/stats', staffOrAdminOnly, async (req, res) => {
+    try {
+        const { data: payments, error: payError } = await supabase
+            .from('payments')
+            .select('amount, status, created_at');
+        if (payError) throw payError;
+
+        const { data: profiles, error: profError } = await supabase
+            .from('profiles')
+            .select('plan');
+        if (profError) throw profError;
+
+        let totalRevenue = 0;
+        let pendingRequests = 0;
+        let todayRevenue = 0;
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        payments.forEach(p => {
+            if (p.status === 'approved') {
+                totalRevenue += Number(p.amount) || 0;
+                const payDate = new Date(p.created_at);
+                if (payDate >= today) {
+                    todayRevenue += Number(p.amount) || 0;
+                }
+            } else if (p.status === 'pending') {
+                pendingRequests++;
+            }
+        });
+
+        const activeSubscribers = profiles.filter(p => p.plan && p.plan !== 'free' && p.plan !== 'admin' && p.plan !== 'staff').length;
+
+        res.json({ 
+            success: true, 
+            stats: {
+                totalRevenue,
+                todayRevenue,
+                activeSubscribers,
+                pendingRequests
+            } 
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/payments/copanel/:id/verify - Approve/Reject with notes (Staff & Admin)
+router.post('/copanel/:id/verify', staffOrAdminOnly, async (req, res) => {
+    const { status, rejection_reason, notes } = req.body; // status: 'approved' | 'rejected'
     const paymentId = req.params.id;
 
     try {
@@ -66,13 +158,14 @@ router.post('/admin/:id/verify', adminOnly, async (req, res) => {
         if (fetchError) throw fetchError;
 
         if (status === 'approved') {
-            // Activate subscription (logic placeholder)
+            // Automatically activate subscription
             await supabase.from('profiles').update({ plan: payment.plan_name }).eq('id', payment.user_id);
         }
 
         const { error: updateError } = await supabase.from('payments').update({
             status,
-            rejection_reason
+            rejection_reason,
+            notes
         }).eq('id', paymentId);
         
         if (updateError) throw updateError;

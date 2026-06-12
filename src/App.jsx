@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Projects from './pages/Projects';
 import CreateWebsite from './pages/CreateWebsite';
 import Admin from './pages/Admin';
+import StaffPanel from './pages/StaffPanel';
 import Auth from './pages/Auth';
 import ContactUs from './pages/ContactUs';
 import Settings from './pages/Settings';
@@ -37,6 +38,7 @@ function App() {
             {/* Protected Routes */}
             <Route path="/create" element={<ProtectedRoute><CreateWebsite /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+            <Route path="/copanel" element={<ProtectedRoute><StaffPanel /></ProtectedRoute>} />
             <Route path="/ide" element={<ProtectedRoute><IDE /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />

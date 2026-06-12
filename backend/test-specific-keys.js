@@ -21,7 +21,7 @@ async function testModels() {
             apiKey: t.key,
             baseURL: 'https://integrate.api.nvidia.com/v1',
             maxRetries: 0,
-            timeout: 10000
+            timeout: 60000
         });
 
         try {

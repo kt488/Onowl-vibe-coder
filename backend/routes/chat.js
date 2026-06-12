@@ -1,6 +1,5 @@
 const express = require('express');
 const Joi = require('joi');
-const { fetch } = require('undici');
 const fs = require('fs');
 const path = require('path');
 const { chatRateLimiter } = require('../middleware/rateLimiter');
@@ -206,101 +205,69 @@ Always explain your changes briefly before outputting the code blocks.` + cached
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
-                'Accept': 'text/event-stream'
+                'Accept': 'application/json'
             },
             body: JSON.stringify({
                 model: model,
                 messages: [systemMessage, ...processedMessages],
                 temperature: temperature,
                 max_tokens: max_tokens,
-                stream: true,
+                stream: true, // Enabled streaming
             })
         });
 
         console.log("[Chat] Response Status:", response.status);
-        console.log("[Chat] Response Headers:", JSON.stringify(Object.fromEntries(response.headers.entries())));
-
+        
         if (!response.ok) {
             const errorText = await response.text();
             console.error("[Chat] API Error Response:", errorText);
             throw new Error(`API Error: ${response.statusText} - ${errorText}`);
         }
 
+        // Set streaming headers
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        // Handle streaming response
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        
         let fullContent = '';
-        let buffer = '';
 
-        console.log("[Chat] Starting stream consumption...");
         while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-                console.log("[Chat] Stream done.");
-                break;
-            }
-
-            console.log("[Chat] Received chunk of size:", value ? value.length : 0);
-            buffer += decoder.decode(value, { stream: true });
-            // ... (rest of parsing)
-            let lines = buffer.split('\n');
-            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+            if (done) break;
             
-            for (const line of lines) {
-                if (!line || !line.trim()) continue;
-                console.log("[SSE Line]:", line);
-                if (line.startsWith('data: ')) {
-                    const data = line.slice(6);
-                    console.log("[SSE Data]:", data);
-                    if (data === '[DONE]') continue;
-                    try {
-                        const json = JSON.parse(data);
-                        const content = json.choices[0]?.delta?.content || '';
-                        
+            const chunk = decoder.decode(value, { stream: true });
+            // Parse and forward chunks to the client
+            res.write(chunk);
+            
+            // Collect full content for potential command extraction
+            // Note: Simplistic parsing, might need robust JSON handling
+            try {
+                const lines = chunk.split('\\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const jsonStr = line.slice(6);
+                        if (jsonStr === '[DONE]') continue;
+                        const data = JSON.parse(jsonStr);
+                        const content = data.choices[0]?.delta?.content || '';
                         fullContent += content;
-                        
-                        // Send the content to frontend, even if it's empty, 
-                        // if you need to maintain stream flow.
-                        // Or only send if content exists.
-                        sendUpdate(content);
-                        
-                        // ... (Search logic)
-                    } catch (e) {
-                        console.error("[SSE Parse Error]:", e.message, "Line:", line);
                     }
                 }
+            } catch (e) {
+                // Ignore parse errors on partial chunks
             }
         }
-
-        // Post-stream logic: Commands, Files, Stats, cleanup
-        console.log("[Chat] Stream consumption completed. Full length:", fullContent.length);
-        const duration = Date.now() - startTime;
-        incrementSuccess(model, duration);
-
-        // Basic command extraction logic (example)
-        const commandMatch = fullContent.match(/### RUN:\s*(.+)/);
-        if (commandMatch && commandMatch[1]) {
-            const command = commandMatch[1].trim();
-            sendUpdate(`➜  Executing: ${command}`, 'terminal');
-            
-            executeCommand(command, [], (data) => {
-                sendUpdate(data, 'terminal');
-            }, (code) => {
-                sendUpdate(`➜  Command exited with code ${code}`, 'terminal');
-            });
-        }
-
         res.end();
+
     } catch (err) {
         console.error("[Chat Error]:", err);
         incrementFailure();
         
-        // If headers haven't been sent yet, send a JSON error
         if (!res.headersSent) {
             res.status(500).json({ success: false, error: err.message });
-        } else {
-            // If we are in middle of a stream, send an error event
-            res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-            res.end();
         }
     }
 });
