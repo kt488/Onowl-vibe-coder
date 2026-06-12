@@ -422,7 +422,12 @@ const IDE = () => {
             }
         }
       }
-                });
+    } catch (err) {
+      clearInterval(progressInterval);
+      setIsLoading(false);
+      setLoadingProgress(0);
+      setMessages(prev => [...prev, { role: 'ai', text: `Error: ${err.message}` }]);
+    }
                 
                 setFiles(prevFiles => {
                   const existingIndex = prevFiles.findIndex(f => f.name === targetFile);
