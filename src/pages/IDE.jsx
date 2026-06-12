@@ -421,57 +421,73 @@ const IDE = () => {
                 }
             }
         }
+      } // end while loop
+      
+      // Live Extraction for UI - Enhanced AI Agent Mode
+      const parts = fullContent.split('```');
+      let chatSummary = '';
+      let activeActionFile = '';
+      let extractedBlocks = [];
+
+      parts.forEach((part, i) => {
+        if (i % 2 === 0) {
+          const fileMatch = [...part.matchAll(/###\s*FILE:\s*([^\s\n]+)/gi)].pop();
+          if (fileMatch) activeActionFile = fileMatch[1].trim();
+          chatSummary += part.replace(/###\s*FILE:\s*[^\s\n]+/gi, '').trim();
+        } else {
+           extractedBlocks.push({
+               lang: part.substring(0, part.indexOf('\n')).trim(),
+               code: part.substring(part.indexOf('\n') + 1),
+               targetFile: activeActionFile
+           });
+        }
+      });
+
+      // 2. Update Editor & Terminal
+      if (extractedBlocks.length > 0) {
+        extractedBlocks.forEach(block => {
+            const targetFile = block.targetFile || 'autonomous_build.js';
+            setTerminalLogs(prev => {
+                const cleanPrev = prev.filter(l => l.type !== 'stream');
+                return [...cleanPrev, { type: 'stream', text: `➜  [BUILD] Writing to ${targetFile}...` }];
+            });
+            
+            setFiles(prevFiles => {
+              const existingIndex = prevFiles.findIndex(f => f.name === targetFile);
+              if (existingIndex >= 0) {
+                const updated = [...prevFiles];
+                updated[existingIndex].content = block.code;
+                return updated;
+              } else {
+                const pathParts = targetFile.split('/');
+                if (pathParts.length > 1) {
+                    let pathAccumulator = '';
+                    const newFolders = [];
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        pathAccumulator += (pathAccumulator ? '/' : '') + pathParts[i];
+                        newFolders.push(pathAccumulator);
+                    }
+                    setExpandedFolders(prev => Array.from(new Set([...prev, ...newFolders])));
+                }
+
+                const newId = Date.now().toString();
+                const newFile = {
+                  id: newId,
+                  name: targetFile,
+                  language: targetFile.split('.').pop() === 'js' ? 'javascript' : targetFile.split('.').pop() === 'jsx' ? 'javascript' : targetFile.split('.').pop(),
+                  content: block.code
+                };
+                return [...prevFiles, newFile];
+              }
+            });
+        });
+        setTerminalLogs(prev => [...prev, { type: 'success', text: `✓  [SUCCESS] Wrote ${extractedBlocks.length} files.` }]);
       }
     } catch (err) {
       clearInterval(progressInterval);
       setIsLoading(false);
       setLoadingProgress(0);
       setMessages(prev => [...prev, { role: 'ai', text: `Error: ${err.message}` }]);
-    }
-                
-                setFiles(prevFiles => {
-                  const existingIndex = prevFiles.findIndex(f => f.name === targetFile);
-                  if (existingIndex >= 0) {
-                    const updated = [...prevFiles];
-                    updated[existingIndex].content = block.code;
-                    return updated;
-                  } else {
-                    // Auto-expand folders for the new file
-                    const pathParts = targetFile.split('/');
-                    if (pathParts.length > 1) {
-                        let pathAccumulator = '';
-                        const newFolders = [];
-                        for (let i = 0; i < pathParts.length - 1; i++) {
-                            pathAccumulator += (pathAccumulator ? '/' : '') + pathParts[i];
-                            newFolders.push(pathAccumulator);
-                        }
-                        setExpandedFolders(prev => Array.from(new Set([...prev, ...newFolders])));
-                    }
-
-                    const newId = Date.now().toString();
-                    const newFile = {
-                      id: newId,
-                      name: targetFile,
-                      language: targetFile.split('.').pop() === 'js' ? 'javascript' : targetFile.split('.').pop() === 'jsx' ? 'javascript' : targetFile.split('.').pop(),
-                      content: block.code
-                    };
-                    return [...prevFiles, newFile];
-                  }
-                });
-            });
-            setTerminalLogs(prev => [...prev, { type: 'success', text: `✓  [SUCCESS] Wrote ${extractedBlocks.length} files.` }]);
-          } else {
-             setTerminalLogs(prev => prev.filter(l => l.type !== 'stream'));
-          }
-      } else {
-          setTerminalLogs(prev => prev.filter(l => l.type !== 'stream'));
-      }
-    } catch (error) {
-      clearInterval(progressInterval);
-      setLoadingProgress(0);
-      setIsLoading(false);
-      setTerminalLogs(prev => prev.filter(l => l.type !== 'stream'));
-      setTerminalLogs(prev => [...prev, { type: 'error', text: `[SYSTEM ERROR] ${error.message}` }]);
     }
   };
 
