@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:all": "concurrently \"vite\" \"cd backend && npm run dev\"",
-    "build": "vite build && npm install --prefix backend",
+    "build": "vite build && npm install --prefix backend --omit=dev",
     "start": "node backend/server.js",
     "preview": "vite preview"
   },
