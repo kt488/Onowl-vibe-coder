@@ -1,3 +1,14 @@
 [variables]
 NPM_CONFIG_PRODUCTION = "false"
 NPM_CONFIG_OMIT = "dev"
+NODE_ENV = "production"
+
+[phases.setup]
+nixPkgs = ["nodejs"]
+cmds = ["npm install"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "node backend/server.js"
