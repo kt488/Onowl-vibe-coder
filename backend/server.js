@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Serve static files from the React frontend 'dist' directory
-app.use(express.static(path.join(__dirname, '../dist')));
+app.use(express.static(path.join(__dirname, '../ai-workspace/dist')));
 
 // ==========================================
 // Middleware Configuration
@@ -64,7 +64,7 @@ app.use('/api/*', (req, res, next) => {
 
 // For all other routes, serve the React app (SPA fallback)
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
+    res.sendFile(path.join(__dirname, '../ai-workspace/dist/index.html'));
 });
 
 // Global error handler
