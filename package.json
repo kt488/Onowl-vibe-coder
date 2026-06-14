@@ -2,7 +2,6 @@
   "name": "onowl-ide",
   "private": true,
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:all": "concurrently \"vite\" \"cd backend && npm run dev\"",
