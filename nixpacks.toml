@@ -4,7 +4,7 @@ NODE_ENV = "production"
 
 [phases.setup]
 nixPkgs = ["nodejs"]
-cmds = ["npm install", "npm --prefix backend install"]
+cmds = ["npm install --include=dev", "npm --prefix backend install"]
 
 [phases.build]
 cmds = ["npm run build"]
