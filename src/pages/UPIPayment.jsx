@@ -47,31 +47,23 @@ const UPIPayment = () => {
         return;
       }
 
-      // Backend route /api/payments needs fixing to handle auth properly.
-      // But we can also just insert into Supabase directly if RLS allows, 
-      // or we hit the backend with the token.
-      const response = await fetch('/api/payments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
+      // Insert directly into Supabase using the authenticated user's session
+      // RLS policy allows users to insert their own payments
+      const { error } = await supabase.from('payments').insert({
+          user_id: session.user.id,
           plan_name: planName,
           amount: amount,
-          utr: utr
-        })
+          utr: utr,
+          payment_method: 'UPI'
       });
 
-      const result = await response.json();
-      
-      if (response.ok || result.success) {
+      if (!error) {
         setPaymentSuccess(true);
         setTimeout(() => {
           navigate('/dashboard'); 
         }, 3000);
       } else {
-        alert(`Error: ${result.error || 'Failed to submit payment'}`);
+        alert(`Error: ${error.message || 'Failed to submit payment'}`);
       }
     } catch (error) {
       console.error(error);
