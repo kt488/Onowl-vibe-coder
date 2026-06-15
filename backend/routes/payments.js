@@ -77,9 +77,10 @@ router.get('/copanel', staffOrAdminOnly, async (req, res) => {
             
         if (payError) throw payError;
 
-        // Fetch auth users to get emails
-        const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
-        if (usersError) console.error("Error fetching users for emails:", usersError);
+        // Fetch auth users to get emails safely
+        const usersListResult = await supabase.auth.admin.listUsers();
+        if (usersListResult.error) console.error("Error fetching users for emails:", usersListResult.error);
+        const users = usersListResult.data?.users || [];
 
         const emailMap = {};
         if (users) {

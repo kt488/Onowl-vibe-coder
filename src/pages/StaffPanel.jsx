@@ -37,7 +37,11 @@ const StaffPanel = () => {
     const fetchData = async () => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session) return;
+            if (!session) {
+                setLoading(false);
+                toast.error('You must be logged in as Staff/Admin to view this page.');
+                return;
+            }
 
             const [payRes, statsRes] = await Promise.all([
                 fetch('/api/payments/copanel', {
