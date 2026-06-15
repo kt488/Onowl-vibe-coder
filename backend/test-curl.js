@@ -11,7 +11,7 @@ async function test() {
             'Accept': 'application/json'
         },
         body: JSON.stringify({
-            model: 'deepseek-ai/deepseek-v4-pro',
+            model: 'nvidia/nemotron-3-ultra-550b-a55b',
             messages: [{ role: 'user', content: 'Hello' }],
             stream: false,
             max_tokens: 10

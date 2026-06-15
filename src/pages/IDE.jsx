@@ -638,7 +638,6 @@ const IDE = () => {
 
               let avatar = '🤖';
               if (selectedModel.includes('kimi')) avatar = '👷';
-              else if (selectedModel.includes('deepseek')) avatar = '💻';
               else if (selectedModel.includes('glm')) avatar = '🧠';
               else if (selectedModel.includes('nemotron')) avatar = '🤖';
               else if (selectedModel.includes('minimax')) avatar = '🔮';
@@ -663,9 +662,8 @@ const IDE = () => {
             <div className="bg-background/50 p-1 rounded-lg border border-border flex shrink-0 gap-1 mb-3">
               {[
                 { id: 'moonshotai/kimi-k2.6', label: 'Kimi', icon: '👷' },
-                { id: 'deepseek-ai/deepseek-v4-pro', label: 'Coder', icon: '💻' },
-                { id: 'z-ai/glm-5.1', label: 'GLM', icon: '🧠' },
                 { id: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'Nemotron', icon: '🤖' },
+                { id: 'z-ai/glm-5.1', label: 'GLM', icon: '🧠' },
                 { id: 'minimaxai/minimax-m2.7', label: 'MiniMax', icon: '🔮' },
                 { id: 'qwen/qwen3.5-122b-a10b', label: 'Qwen', icon: '🐉' },
                 { id: 'meta/llama3-70b-instruct', label: 'Llama', icon: '🦙' }

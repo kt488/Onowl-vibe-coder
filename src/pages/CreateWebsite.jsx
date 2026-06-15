@@ -46,7 +46,7 @@ const CreateWebsite = () => {
       >
         <Sparkles className="w-12 h-12 text-primary mx-auto mb-6 animate-pulse" />
         <h1 className="text-4xl md:text-5xl font-bold mb-4 text-white">What do you want to build?</h1>
-        <p className="text-gray-400 mb-8 text-lg">Describe your website and DeepSeek will generate it for you.</p>
+        <p className="text-gray-400 mb-8 text-lg">Describe your website and Nemotron will generate it for you.</p>
 
         <form onSubmit={handleSubmit} className="relative group">
           <div className="absolute -inset-1 bg-gradient-to-r from-primary to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>

@@ -43,7 +43,7 @@ const chatSchema = Joi.object({
     ).min(1).required(),
     temperature: Joi.number().min(0).max(2).optional().default(0.7),
     max_tokens: Joi.number().min(1).max(8192).optional().default(8192),
-    model: Joi.string().optional().default('deepseek-ai/deepseek-v4-pro'),
+    model: Joi.string().optional().default('nvidia/nemotron-3-ultra-550b-a55b'),
     image: Joi.string().allow(null, '').optional()
 });
 
@@ -145,34 +145,19 @@ Always explain your changes briefly before outputting the code blocks.` + cached
         let apiKeyEnvVar = 'NVIDIA_NIM_API_KEY';
         let baseURL = 'https://integrate.api.nvidia.com/v1';
 
+        // All models are hosted on NVIDIA NIM, use the single API key
         if (model.includes('kimi')) {
-            apiKeyEnvVar = 'KIMI_API_KEY';
-            apiKey = process.env.KIMI_API_KEY || apiKey;
-            baseURL = 'https://integrate.api.nvidia.com/v1'; // Use nvidia endpoint for kimi
             model = 'moonshotai/kimi-k2.6';
-        } else if (model.includes('deepseek')) {
-            apiKeyEnvVar = 'DEEPSEEK_API_KEY';
-            apiKey = process.env.DEEPSEEK_API_KEY || apiKey;
-            baseURL = 'https://integrate.api.nvidia.com/v1'; // Use nvidia endpoint for deepseek
         } else if (model.includes('nemotron')) {
-            apiKeyEnvVar = 'NEMOTRON_API_KEY';
-            apiKey = process.env.NEMOTRON_API_KEY || apiKey;
-            baseURL = 'https://integrate.api.nvidia.com/v1'; // Always use nvidia endpoint for nemotron
+            model = 'nvidia/nemotron-3-ultra-550b-a55b';
         } else if (model.includes('minimax')) {
-            apiKeyEnvVar = 'MINIMAX_API_KEY';
-            apiKey = process.env.MINIMAX_API_KEY || apiKey;
-            baseURL = 'https://integrate.api.nvidia.com/v1'; // Use nvidia endpoint for minimax
+            model = 'minimaxai/minimax-m2.7';
         } else if (model.includes('qwen')) {
-            apiKeyEnvVar = 'QWEN_API_KEY';
-            apiKey = process.env.QWEN_API_KEY || apiKey;
-            baseURL = 'https://integrate.api.nvidia.com/v1'; // Use nvidia endpoint for qwen
+            model = 'qwen/qwen3.5-122b-a10b';
         } else if (model.includes('glm')) {
-            apiKeyEnvVar = 'GLM_API_KEY';
-            apiKey = process.env.GLM_API_KEY || apiKey;
-            if (apiKey && !apiKey.startsWith('nvapi-')) {
-                baseURL = 'https://open.bigmodel.cn/api/paas/v4';
-                model = 'glm-4-plus'; // Map to native model name
-            }
+            model = 'z-ai/glm-5.1';
+        } else if (model.includes('llama')) {
+            model = 'meta/llama3-70b-instruct';
         }
 
         // On-demand validation

@@ -6,7 +6,7 @@ async function testModels() {
 
     const tests = [
         { name: 'Kimi', modelId: 'moonshotai/kimi-k2.6', key: process.env.KIMI_API_KEY },
-        { name: 'DeepSeek', modelId: 'deepseek-ai/deepseek-v4-pro', key: process.env.DEEPSEEK_API_KEY },
+        { name: 'Nemotron', modelId: 'nvidia/nemotron-3-ultra-550b-a55b', key: process.env.NEMOTRON_API_KEY },
         { name: 'GLM', modelId: 'z-ai/glm-5.1', key: process.env.NVIDIA_NIM_API_KEY } // Fallback for GLM
     ];
 

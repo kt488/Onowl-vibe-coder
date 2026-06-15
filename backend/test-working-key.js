@@ -1,9 +1,9 @@
-require('dotenv').config();
+require('dotenv').config({ path: __dirname + '/.env' });
 const OpenAI = require('openai');
 
 const models = [
     { name: 'Kimi', modelId: 'moonshotai/kimi-k2.6' },
-    { name: 'DeepSeek', modelId: 'deepseek-ai/deepseek-v4-pro' },
+    { name: 'Nemotron', modelId: 'nvidia/nemotron-3-ultra-550b-a55b' },
     { name: 'MiniMax', modelId: 'minimaxai/minimax-m2.7' },
     { name: 'GLM', modelId: 'z-ai/glm-5.1' }
 ];

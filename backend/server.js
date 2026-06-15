@@ -35,7 +35,7 @@ app.use(morgan('dev'));
 // Routes Configuration
 // ==========================================
 
-// Chat endpoint (DeepSeek integration via NVIDIA NIM)
+// Chat endpoint (Nemotron integration via NVIDIA NIM)
 app.use('/api/chat', chatRoutes);
 
 // Admin stats endpoint

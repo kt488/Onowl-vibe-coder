@@ -1,6 +1,6 @@
 # Onowl IDE Backend API
 
-This is the secure, production-ready Node.js + Express backend for the Onowl AI Coding IDE. It proxies chat requests from the frontend to the **NVIDIA NIM DeepSeek API**, ensuring that API keys remain completely secure and hidden from the client.
+This is the secure, production-ready Node.js + Express backend for the Onowl AI Coding IDE. It proxies chat requests from the frontend to the **NVIDIA NIM Nemotron API**, ensuring that API keys remain completely secure and hidden from the client.
 
 ## Features
 
@@ -55,7 +55,7 @@ Accepts a conversation array and streams the AI's response back.
   ],
   "temperature": 0.7,
   "max_tokens": 1024,
-  "model": "deepseek-ai/deepseek-coder-33b-instruct"
+  "model": "nvidia/nemotron-3-ultra-550b-a55b"
 }
 ```
 

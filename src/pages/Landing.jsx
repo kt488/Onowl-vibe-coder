@@ -197,7 +197,7 @@ const Landing = () => {
             {[
               {
                 title: "Next-Gen AI Intelligence",
-                desc: "Our platform integrates the latest DeepSeek-V4 and NVIDIA NIM models. It doesn't just complete your code; it understands your entire project context to provide architectural suggestions, security audits, and automated refactoring.",
+                desc: "Our platform integrates the latest Nemotron-3 Ultra and NVIDIA NIM models. It doesn't just complete your code; it understands your entire project context to provide architectural suggestions, security audits, and automated refactoring.",
                 image: "https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=1000",
                 align: "left"
               },
@@ -273,7 +273,7 @@ const Landing = () => {
             className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"
           >
             {[
-              { icon: Zap, title: 'AI Code Generation', desc: 'Context-aware code completion powered by DeepSeek & NVIDIA NIM.' },
+              { icon: Zap, title: 'AI Code Generation', desc: 'Context-aware code completion powered by Nemotron & NVIDIA NIM.' },
               { icon: Download, title: 'Powerful Export', desc: 'Download single files, ZIP archives, or push directly to GitHub.' },
               { icon: Code2, title: 'Live Preview', desc: 'Instant feedback loop for React, Next.js, and vanilla HTML/JS/CSS.' },
               { icon: Terminal, title: 'Integrated Terminal', desc: 'Cloud workspaces with full bash access and secure execution.' },

@@ -2,12 +2,7 @@ const { supabase } = require('../utils/supabase');
 
 // Map env variable names to display names
 const API_KEY_MAP = {
-  NVIDIA_NIM_API_KEY: 'NVIDIA NIM (GLM/Default)',
-  KIMI_API_KEY: 'Kimi AI',
-  DEEPSEEK_API_KEY: 'DeepSeek Pro',
-  NEMOTRON_API_KEY: 'Nemotron',
-  MINIMAX_API_KEY: 'MiniMax',
-  QWEN_API_KEY: 'Qwen'
+  NVIDIA_NIM_API_KEY: 'NVIDIA NIM (All Models)'
 };
 
 /**

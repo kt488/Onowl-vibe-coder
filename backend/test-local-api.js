@@ -6,7 +6,7 @@ async function testApi() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 messages: [{ role: 'user', content: 'Reply "Hello"' }],
-                model: 'deepseek-ai/deepseek-v4-pro',
+                model: 'nvidia/nemotron-3-ultra-550b-a55b',
                 temperature: 0.7,
                 max_tokens: 100
             })
