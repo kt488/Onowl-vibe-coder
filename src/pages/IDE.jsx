@@ -389,6 +389,7 @@ const IDE = () => {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullContent = '';
+      let buffer = '';
       
       // Initialize Assistant Message
       setMessages(prev => [...prev, { role: 'ai', text: '' }]);
@@ -397,13 +398,14 @@ const IDE = () => {
         const { done, value } = await reader.read();
         if (done) break;
         
-        const chunk = decoder.decode(value, { stream: true });
+        buffer += decoder.decode(value, { stream: true });
         
-        // Very basic SSE chunk parsing - needs adaptation if backend emits raw stream
-        const lines = chunk.split('\\n');
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // Keep the last incomplete line in buffer
+
         for (const line of lines) {
             if (line.startsWith('data: ')) {
-                const jsonStr = line.slice(6);
+                const jsonStr = line.trim().slice(6);
                 if (jsonStr === '[DONE]') continue;
                 try {
                     const data = JSON.parse(jsonStr);
@@ -424,29 +426,62 @@ const IDE = () => {
       } // end while loop
       
       // Live Extraction for UI - Enhanced AI Agent Mode
-      const parts = fullContent.split('```');
-      let chatSummary = '';
-      let activeActionFile = '';
+      let cleanContent = fullContent;
       let extractedBlocks = [];
+      let updates = [];
 
-      parts.forEach((part, i) => {
-        if (i % 2 === 0) {
-          const fileMatch = [...part.matchAll(/###\s*FILE:\s*([^\s\n]+)/gi)].pop();
-          if (fileMatch) activeActionFile = fileMatch[1].trim();
-          chatSummary += part.replace(/###\s*FILE:\s*[^\s\n]+/gi, '').trim();
-        } else {
-           extractedBlocks.push({
-               lang: part.substring(0, part.indexOf('\n')).trim(),
-               code: part.substring(part.indexOf('\n') + 1),
-               targetFile: activeActionFile
-           });
-        }
+      // Extract UPDATE blocks robustly
+      const updateRegex = /###\s*UPDATE:\s*([^\s\n]+)[\s\S]*?<<<<[ \t]*\n([\s\S]*?)\n[ \t]*====[ \t]*\n([\s\S]*?)\n[ \t]*>>>>/gi;
+      let updateMatch;
+      while ((updateMatch = updateRegex.exec(fullContent)) !== null) {
+          updates.push({
+              targetFile: updateMatch[1].trim(),
+              oldCode: updateMatch[2],
+              newCode: updateMatch[3]
+          });
+          cleanContent = cleanContent.replace(updateMatch[0], '');
+      }
+
+      // Extract FILE blocks robustly
+      const fileRegex = /###\s*FILE:\s*([^\s\n]+)[\s\S]*?```[ \t]*([a-zA-Z0-9_-]*)\n([\s\S]*?)```/gi;
+      let fileMatch;
+      while ((fileMatch = fileRegex.exec(fullContent)) !== null) {
+          extractedBlocks.push({
+              targetFile: fileMatch[1].trim(),
+              lang: fileMatch[2].trim(),
+              code: fileMatch[3]
+          });
+          cleanContent = cleanContent.replace(fileMatch[0], '');
+      }
+
+      // Extract leftover generic code blocks (autonomous files)
+      const fallbackRegex = /```[ \t]*([a-zA-Z0-9_-]*)\n([\s\S]*?)```/gi;
+      let fallbackMatch;
+      while ((fallbackMatch = fallbackRegex.exec(cleanContent)) !== null) {
+          extractedBlocks.push({
+              targetFile: 'autonomous_build.js',
+              lang: fallbackMatch[1].trim(),
+              code: fallbackMatch[2]
+          });
+          cleanContent = cleanContent.replace(fallbackMatch[0], '');
+      }
+
+      // Update final chat message to hide the code blocks
+      const chatSummary = cleanContent.replace(/###\s*(FILE|UPDATE):\s*[^\s\n]+/gi, '').trim();
+      
+      setMessages(prev => {
+          const newMsgs = [...prev];
+          newMsgs[newMsgs.length - 1].text = chatSummary || "Code changes have been applied to the workspace.";
+          return newMsgs;
       });
 
       // 2. Update Editor & Terminal
+      let updatedFileCount = 0;
+      
       if (extractedBlocks.length > 0) {
         extractedBlocks.forEach(block => {
             const targetFile = block.targetFile || 'autonomous_build.js';
+            updatedFileCount++;
             setTerminalLogs(prev => {
                 const cleanPrev = prev.filter(l => l.type !== 'stream');
                 return [...cleanPrev, { type: 'stream', text: `➜  [BUILD] Writing to ${targetFile}...` }];
@@ -481,7 +516,29 @@ const IDE = () => {
               }
             });
         });
-        setTerminalLogs(prev => [...prev, { type: 'success', text: `✓  [SUCCESS] Wrote ${extractedBlocks.length} files.` }]);
+      }
+
+      if (updates.length > 0) {
+        updates.forEach(update => {
+            updatedFileCount++;
+            setTerminalLogs(prev => {
+                const cleanPrev = prev.filter(l => l.type !== 'stream');
+                return [...cleanPrev, { type: 'stream', text: `➜  [BUILD] Patching ${update.targetFile}...` }];
+            });
+            setFiles(prevFiles => {
+                const existingIndex = prevFiles.findIndex(f => f.name === update.targetFile);
+                if (existingIndex >= 0) {
+                    const updated = [...prevFiles];
+                    updated[existingIndex].content = updated[existingIndex].content.replace(update.oldCode, update.newCode);
+                    return updated;
+                }
+                return prevFiles;
+            });
+        });
+      }
+
+      if (updatedFileCount > 0) {
+          setTerminalLogs(prev => [...prev, { type: 'success', text: `✓  [SUCCESS] Updated ${updatedFileCount} files.` }]);
       }
     } catch (err) {
       clearInterval(progressInterval);

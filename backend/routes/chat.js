@@ -19,11 +19,15 @@ try {
     const skillsDir = path.join(__dirname, '../ai_skills/.agents/skills');
     if (fs.existsSync(skillsDir)) {
         const folders = fs.readdirSync(skillsDir);
-        let skillsAccumulator = '\\n\\n--- AVAILABLE SKILLS ---\\n';
+        let skillsAccumulator = '\\n\\n--- AVAILABLE SKILLS (Truncated for Context Limit) ---\\n';
         folders.forEach(folder => {
             const skillFilePath = path.join(skillsDir, folder, 'SKILL.md');
             if (fs.existsSync(skillFilePath)) {
-                const skillContent = fs.readFileSync(skillFilePath, 'utf-8');
+                let skillContent = fs.readFileSync(skillFilePath, 'utf-8');
+                // Truncate to prevent context window overflow which causes SocketError
+                if (skillContent.length > 500) {
+                    skillContent = skillContent.substring(0, 500) + '\\n... [TRUNCATED DUE TO CONTEXT LIMITS]';
+                }
                 skillsAccumulator += `\\n### SKILL: ${folder}\\n${skillContent}\\n`;
             }
         });
@@ -43,7 +47,7 @@ const chatSchema = Joi.object({
     ).min(1).required(),
     temperature: Joi.number().min(0).max(2).optional().default(0.7),
     max_tokens: Joi.number().min(1).max(8192).optional().default(8192),
-    model: Joi.string().optional().default('nvidia/nemotron-3-ultra-550b-a55b'),
+    model: Joi.string().optional().default('meta/llama-3.1-70b-instruct'),
     image: Joi.string().allow(null, '').optional()
 });
 
@@ -141,23 +145,29 @@ You MUST write the FULL, complete code for any block you generate. NEVER use pla
 Always explain your changes briefly before outputting the code blocks.` + cachedSkillsText
         };
 
-        let apiKey = process.env.NVIDIA_NIM_API_KEY;
+        let apiKey = process.env.NVIDIA_NIM_API_KEY || process.env.KIMI_API_KEY;
         let apiKeyEnvVar = 'NVIDIA_NIM_API_KEY';
         let baseURL = 'https://integrate.api.nvidia.com/v1';
 
-        // All models are hosted on NVIDIA NIM, use the single API key
+        // NVIDIA NIM Gateway throws TCP SocketErrors for deprecated model strings.
+        // We remap incoming UI model selections to highly capable, active Nvidia NIM models.
         if (model.includes('kimi')) {
-            model = 'moonshotai/kimi-k2.6';
+            model = 'meta/llama-3.1-70b-instruct'; // Fallback to powerful Llama 3.1
         } else if (model.includes('nemotron')) {
-            model = 'nvidia/nemotron-3-ultra-550b-a55b';
+            model = 'meta/llama-3.1-405b-instruct'; // Replace deprecated nemotron-3
         } else if (model.includes('minimax')) {
-            model = 'minimaxai/minimax-m2.7';
+            model = 'mistralai/mixtral-8x22b-instruct-v0.1'; // Map to Mixtral
         } else if (model.includes('qwen')) {
-            model = 'qwen/qwen3.5-122b-a10b';
+            model = 'qwen/qwen2.5-72b-instruct'; // Use Qwen 2.5
         } else if (model.includes('glm')) {
-            model = 'z-ai/glm-5.1';
+            model = 'google/gemma-2-27b-it'; // Map GLM to Gemma
         } else if (model.includes('llama')) {
-            model = 'meta/llama3-70b-instruct';
+            model = 'meta/llama-3.1-70b-instruct'; // Upgrade to 3.1
+        }
+
+        // Handle Image Vision fallback
+        if (image && !model.includes('vision')) {
+            model = 'meta/llama-3.2-90b-vision-instruct'; // Force a vision-capable model if image uploaded
         }
 
         // On-demand validation
@@ -184,6 +194,10 @@ Always explain your changes briefly before outputting the code blocks.` + cached
                 content: m.content || m.text
             };
         });
+
+        console.log("[Chat] Sending to:", `${baseURL}/chat/completions`);
+        console.log("[Chat] Using Key:", apiKey.substring(0, 10) + "...");
+        console.log("[Chat] Model:", model);
 
         const response = await fetch(`${baseURL}/chat/completions`, {
             method: 'POST',
