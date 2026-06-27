@@ -37,7 +37,16 @@ const Subscription = () => {
     if (!user) return;
     const selectedPlan = PLANS.find(p => p.name === planName);
     const numericPrice = selectedPlan ? parseInt(selectedPlan.price.replace(/[^0-9]/g, ''), 10) || 0 : 0;
-    
+
+    console.log('[PAYMENT FLOW] Upgrade Plan clicked', {
+      planName,
+      selectedPlan: selectedPlan?.label,
+      numericPrice,
+      user: user.id,
+      userEmail: user.email,
+      timestamp: new Date().toISOString()
+    });
+
     navigate('/upi-payment', { state: { amount: numericPrice, planName: selectedPlan.label } });
   };
 

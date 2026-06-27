@@ -35,7 +35,7 @@ app.use(morgan('dev'));
 // Routes Configuration
 // ==========================================
 
-// Chat endpoint (Nemotron integration via NVIDIA NIM)
+// Chat endpoint (Friday AI integration)
 app.use('/api/chat', chatRoutes);
 
 // Admin stats endpoint
@@ -86,10 +86,10 @@ if (require.main === module) {
         console.log(`\n🚀 [Server] Onowl Backend is running on http://127.0.0.1:${PORT}`);
         console.log(`🌍 [Environment] ${process.env.NODE_ENV}`);
         
-        if (!process.env.NVIDIA_NIM_API_KEY || process.env.NVIDIA_NIM_API_KEY === 'your_nvidia_nim_api_key_here') {
-            console.warn(`⚠️  [Warning] NVIDIA_NIM_API_KEY is missing or invalid in .env file!`);
+        if (!process.env.FRIDAY_API_KEY) {
+            console.warn(`⚠️  [Warning] FRIDAY_API_KEY is missing in .env file! Friday AI will not work.`);
         } else {
-            console.log(`✅ [NVIDIA NIM] API Key loaded successfully.`);
+            console.log(`✅ [Friday] API Key loaded successfully.`);
         }
     });
 }

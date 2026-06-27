@@ -32,14 +32,13 @@ const IDE = () => {
   const [activeFileId, setActiveFileId] = useState('1');
   const [isExporting, setIsExporting] = useState(false);
   const [chatInput, setChatInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState('moonshotai/kimi-k2.6');
-  const [selectedImage, setSelectedModelImage] = useState(null); // Base64 image
+  const [selectedImage, setSelectedImage] = useState(null); // Base64 image
   const [activeTab, setActiveTab] = useState('chat'); // For mobile tabs: chat, files, editor, preview
   const [expandedFolders, setExpandedFolders] = useState(['src']); // Track open folders
   
   // Split state into Chat and Terminal
   const [messages, setMessages] = useState(() => {
-    const base = [{ role: 'ai', text: 'I am Onowl AI. How can I help you code today?' }];
+    const base = [{ role: 'ai', text: 'I am Friday. How can I help you code today?' }];
     if (initialPrompt) base.push({ role: 'user', text: initialPrompt });
     return base;
   });
@@ -363,10 +362,8 @@ const IDE = () => {
         },
         body: JSON.stringify({
           messages: apiMessages,
-          temperature: selectedModel.includes('kimi') ? 0.3 : 0.7,
-          max_tokens: 2048,
-          model: selectedModel,
-          image: selectedImage
+          temperature: 0.7,
+          max_tokens: 2048
         })
       });
 
@@ -383,7 +380,7 @@ const IDE = () => {
       if (!response.ok) throw new Error('Failed to connect to AI backend.');
 
       // Clear image after sending
-      setSelectedModelImage(null);
+      setSelectedImage(null);
 
       // Handle Streaming
       const reader = response.body.getReader();
@@ -677,7 +674,7 @@ const IDE = () => {
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[10px] text-primary font-black uppercase tracking-widest animate-pulse">
-                    Onowl Engine Processing
+                    Friday Engine Processing
                   </span>
                   <span className="text-[10px] text-gray-500 font-mono">
                     {loadingProgress}%
@@ -693,19 +690,12 @@ const IDE = () => {
             )}
             {messages.map((m, i) => {
 
-              let avatar = '🤖';
-              if (selectedModel.includes('kimi')) avatar = '👷';
-              else if (selectedModel.includes('glm')) avatar = '🧠';
-              else if (selectedModel.includes('nemotron')) avatar = '🤖';
-              else if (selectedModel.includes('minimax')) avatar = '🔮';
-              else if (selectedModel.includes('qwen')) avatar = '🐉';
-              else if (selectedModel.includes('llama')) avatar = '🦙';
-              if (m.role === 'user') avatar = '👤';
+              let avatar = m.role === 'user' ? '👤' : '🦉';
 
               return (
                 <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
                   <div className={`text-xs mb-1 text-gray-500 px-1 flex items-center gap-1`}>
-                    {m.role === 'user' ? 'You' : 'Onowl AI'} {avatar}
+                    {m.role === 'user' ? 'You' : 'Friday'} {avatar}
                   </div>
                   <div className={`p-3 rounded-lg text-sm leading-relaxed max-w-[90%] ${m.role === 'user' ? 'bg-primary/20 border border-primary/30 text-white' : 'bg-background border border-border text-gray-300'}`}>
                     {m.text}
@@ -715,36 +705,13 @@ const IDE = () => {
             })}
           </div>
           <div className="p-4 border-t border-border bg-surface">
-            {/* Segmented Model Tab Bar */}
-            <div className="bg-background/50 p-1 rounded-lg border border-border flex shrink-0 gap-1 mb-3">
-              {[
-                { id: 'moonshotai/kimi-k2.6', label: 'Kimi', icon: '👷' },
-                { id: 'nvidia/nemotron-3-ultra-550b-a55b', label: 'Nemotron', icon: '🤖' },
-                { id: 'z-ai/glm-5.1', label: 'GLM', icon: '🧠' },
-                { id: 'minimaxai/minimax-m2.7', label: 'MiniMax', icon: '🔮' },
-                { id: 'qwen/qwen3.5-122b-a10b', label: 'Qwen', icon: '🐉' },
-                { id: 'meta/llama3-70b-instruct', label: 'Llama', icon: '🦙' }
-              ].map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => setSelectedModel(m.id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-[9px] font-black uppercase tracking-tighter transition-all ${
-                    selectedModel === m.id
-                    ? 'bg-surface text-primary shadow-sm border border-border/50'
-                    : 'text-gray-500 hover:bg-white/5 hover:text-gray-400'
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
             <form onSubmit={handleChatSubmit}>
             {selectedImage && (
               <div className="mb-2 relative inline-block">
                 <img src={selectedImage} alt="preview" className="h-16 w-16 object-cover rounded-md border border-primary/30" />
                 <button 
                   type="button" 
-                  onClick={() => setSelectedModelImage(null)}
+                  onClick={() => setSelectedImage(null)}
                   className="absolute -top-2 -right-2 bg-red-500 rounded-full p-0.5 shadow-md hover:bg-red-600"
                 >
                   <X className="w-3 h-3 text-white" />
@@ -762,7 +729,7 @@ const IDE = () => {
                     const file = e.target.files[0];
                     if (file) {
                       const reader = new FileReader();
-                      reader.onloadend = () => setSelectedModelImage(reader.result);
+                      reader.onloadend = () => setSelectedImage(reader.result);
                       reader.readAsDataURL(file);
                     }
                   }}

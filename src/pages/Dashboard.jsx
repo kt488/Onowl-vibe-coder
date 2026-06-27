@@ -101,7 +101,7 @@ const Dashboard = () => {
               <h2 className="text-xl font-bold mb-4">Subscription</h2>
               <p className="text-gray-400">Current Plan: <span className="text-white font-bold">Pro</span></p>
               <p className="text-gray-400">Credits Remaining: <span className="text-white font-bold">2,450</span></p>
-              <button onClick={() => navigate('/payment', { state: { plan: { name: 'Pro', price: 50 } } })} className="mt-4 w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg">Upgrade Plan</button>
+              <button onClick={() => { console.log('[PAYMENT FLOW] Dashboard: Upgrade Plan clicked', { plan: 'Pro', price: 50, path: '/upi-payment', timestamp: new Date().toISOString() }); navigate('/upi-payment', { state: { amount: 50, planName: 'Pro' } }); }} className="mt-4 w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg">Upgrade Plan</button>
             </div>
             <div className="bg-gray-800 p-6 rounded-lg lg:col-span-1">
               <h2 className="text-xl font-bold mb-4">Team Collaboration</h2>

@@ -26,12 +26,26 @@ const UPIPayment = () => {
   };
 
   const handleOpenUpiApp = () => {
+    console.log('[PAYMENT FLOW] Opening UPI app', {
+      merchantUPI: MERCHANT_UPI_ID,
+      amount,
+      planName,
+      timestamp: new Date().toISOString()
+    });
     const params = `pa=${MERCHANT_UPI_ID}&pn=${encodeURIComponent(MERCHANT_NAME)}&am=${amount}&cu=INR`;
     window.location.href = `upi://pay?${params}`;
   };
 
   const handleSubmitPayment = async (e) => {
     e.preventDefault();
+    console.log('[PAYMENT FLOW] Submit Payment clicked', {
+      amount,
+      planName,
+      utrLength: utr.length,
+      utrPreview: utr.slice(0, 4) + '********',
+      timestamp: new Date().toISOString()
+    });
+
     if (!utr || utr.length < 12) {
       alert('Please enter a valid 12-digit UTR/Reference Number');
       return;
@@ -40,7 +54,12 @@ const UPIPayment = () => {
     setIsProcessing(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+      console.log('[PAYMENT FLOW] Session retrieved', {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        timestamp: new Date().toISOString()
+      });
+
       if (!session) {
         alert('You must be logged in to submit a payment.');
         setIsProcessing(false);
@@ -49,6 +68,14 @@ const UPIPayment = () => {
 
       // Insert directly into Supabase using the authenticated user's session
       // RLS policy allows users to insert their own payments
+      console.log('[PAYMENT FLOW] Inserting payment into Supabase', {
+        user_id: session.user.id,
+        plan_name: planName,
+        amount: amount,
+        utr_length: utr.length,
+        timestamp: new Date().toISOString()
+      });
+
       const { error } = await supabase.from('payments').insert({
           user_id: session.user.id,
           plan_name: planName,
@@ -58,15 +85,32 @@ const UPIPayment = () => {
       });
 
       if (!error) {
+        console.log('[PAYMENT FLOW] Payment submitted successfully', {
+          planName,
+          amount,
+          timestamp: new Date().toISOString()
+        });
         setPaymentSuccess(true);
+        console.log('[PAYMENT FLOW] Redirecting to /dashboard in 3 seconds...');
         setTimeout(() => {
-          navigate('/dashboard'); 
+          console.log('[PAYMENT FLOW] Redirecting to /dashboard now');
+          navigate('/dashboard');
         }, 3000);
       } else {
+        console.error('[PAYMENT FLOW] Supabase insert error', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          timestamp: new Date().toISOString()
+        });
         alert(`Error: ${error.message || 'Failed to submit payment'}`);
       }
     } catch (error) {
-      console.error(error);
+      console.error('[PAYMENT FLOW] Network/exception error', {
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      });
       alert('Network error. Please try again.');
     } finally {
       setIsProcessing(false);

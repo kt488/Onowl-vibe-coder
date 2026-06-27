@@ -32,6 +32,7 @@ router.post('/', async (req, res) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
+        console.warn('[PAYMENT FLOW API] Missing authorization header on payment submission');
         return res.status(401).json({ error: 'Unauthorized: Missing authorization header' });
     }
 
@@ -39,10 +40,18 @@ router.post('/', async (req, res) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
+        console.warn('[PAYMENT FLOW API] Invalid token on payment submission', { authError: authError?.message });
         return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
 
     const userId = user.id;
+    console.log('[PAYMENT FLOW API] Payment submission received', {
+        userId,
+        plan_name,
+        amount,
+        utrPreview: utr ? utr.slice(0, 4) + '********' : 'N/A',
+        timestamp: new Date().toISOString()
+    });
 
     try {
         const { data, error } = await supabase.from('payments').insert({
@@ -54,8 +63,10 @@ router.post('/', async (req, res) => {
             payment_method: 'UPI'
         });
         if (error) throw error;
+        console.log('[PAYMENT FLOW API] Payment inserted successfully', { userId, plan_name, amount, timestamp: new Date().toISOString() });
         res.status(201).json({ success: true, data });
     } catch (err) {
+        console.error('[PAYMENT FLOW API] Payment insert error', { userId, error: err.message, timestamp: new Date().toISOString() });
         res.status(400).json({ success: false, error: err.message });
     }
 });
@@ -154,13 +165,42 @@ router.post('/copanel/:id/verify', staffOrAdminOnly, async (req, res) => {
     const { status, rejection_reason, notes } = req.body; // status: 'approved' | 'rejected'
     const paymentId = req.params.id;
 
+    console.log('[PAYMENT FLOW API] Payment verification request', {
+        paymentId,
+        requestedStatus: status,
+        rejection_reason: rejection_reason || 'N/A',
+        verifiedBy: req.user?.id,
+        timestamp: new Date().toISOString()
+    });
+
     try {
         const { data: payment, error: fetchError } = await supabase.from('payments').select('*').eq('id', paymentId).single();
         if (fetchError) throw fetchError;
 
+        console.log('[PAYMENT FLOW API] Payment record fetched', {
+            paymentId,
+            userId: payment.user_id,
+            plan_name: payment.plan_name,
+            amount: payment.amount,
+            currentStatus: payment.status,
+            timestamp: new Date().toISOString()
+        });
+
         if (status === 'approved') {
+            console.log('[PAYMENT FLOW API] Approving payment - activating subscription', {
+                userId: payment.user_id,
+                newPlan: payment.plan_name,
+                timestamp: new Date().toISOString()
+            });
             // Automatically activate subscription
             await supabase.from('profiles').update({ plan: payment.plan_name }).eq('id', payment.user_id);
+        } else if (status === 'rejected') {
+            console.log('[PAYMENT FLOW API] Rejecting payment', {
+                paymentId,
+                userId: payment.user_id,
+                reason: rejection_reason,
+                timestamp: new Date().toISOString()
+            });
         }
 
         const { error: updateError } = await supabase.from('payments').update({
@@ -168,11 +208,17 @@ router.post('/copanel/:id/verify', staffOrAdminOnly, async (req, res) => {
             rejection_reason,
             notes
         }).eq('id', paymentId);
-        
+
         if (updateError) throw updateError;
-        
+
+        console.log('[PAYMENT FLOW API] Payment status updated successfully', {
+            paymentId,
+            newStatus: status,
+            timestamp: new Date().toISOString()
+        });
         res.json({ success: true });
     } catch (err) {
+        console.error('[PAYMENT FLOW API] Payment verification error', { paymentId, error: err.message, timestamp: new Date().toISOString() });
         res.status(500).json({ success: false, error: err.message });
     }
 });
